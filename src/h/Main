@@ -1,0 +1,84 @@
+/* Tabs:Main.h	  		*/
+/* Rik Griffin Nov 2003		*/
+
+#include "C:kernel.h"
+#include "C:swis.h"
+#include "C:glib.h"
+
+#include "Consts.h"
+#include "Header.h"
+#include "Tabs.h"
+#include "Private.h"
+
+#define IGNORE(x) (void)(x)
+
+#ifdef _main_c
+ #define GLOBALv(name,type,val) extern type name; type name = val
+ #define GLOBAL(name,type) extern type name; type name
+#else
+ #define GLOBALv(name,type,val) extern type name
+ #define GLOBAL(name,type) extern type name
+#endif
+
+GLOBALv(RedrawingWindow, int, 0);
+GLOBALv(VScrollSize, unsigned int, 0);
+GLOBALv(HScrollSize, unsigned int, 0);
+GLOBALv(XEig, unsigned int, -1);
+GLOBALv(YEig, unsigned int, -1);
+GLOBALv(Sprites, SpriteArea *, NULL);
+GLOBALv(TabsList, PrivateTabs **, NULL);
+GLOBALv(ListSize, int, 0);
+GLOBALv(Arrow_XSize, int, 0);
+GLOBALv(Arrow_YSize, int, 0);
+#undef GLOBALv
+#undef GLOBAL
+
+
+extern int Filter_ToolboxEvents[];
+extern int Filter_WimpEvents[];
+extern int Filter_WimpMessages[];
+extern char Sprites_c[];
+
+
+#if Debug_On
+ extern void debug_fn(char *, ...);
+ #define DEBUG(l,x) do { if (l <= Debug_Level) debug_fn x;} while (0)
+#else
+ #define DEBUG(l,x)
+#endif
+
+
+#ifdef _main_c
+  extern _kernel_oserror GlobalError;
+  _kernel_oserror GlobalError = { 0, "" };
+#else
+  extern _kernel_oserror GlobalError;
+#endif
+
+#if Debug_On
+
+
+#define EL(x,e,l) do {\
+  if (((e) = (x)) != NULL) {\
+  /*MemCheck_checking c; c = MemCheck_SetChecking(0,0);*/\
+  sprintf(GlobalError.errmess, "%s (%s %d)", (e)->errmess, __FILE__, __LINE__);\
+  GlobalError.errnum = (e)->errnum;\
+  /*MemCheck_RestoreChecking(c);*/\
+  e = &GlobalError;\
+  goto l; }\
+  } while(0)
+
+#define ER(x,e) do {\
+  if ((e = (x)) != NULL) { \
+  /*MemCheck_checking c; c = MemCheck_SetChecking(0,0);*/\
+  sprintf(GlobalError.errmess, "%s (%s %d)", (e)->errmess, __FILE__, __LINE__);\
+  GlobalError.errnum = (e)->errnum;\
+  /*MemCheck_RestoreChecking(c);*/\
+  e = &GlobalError;\
+  return e; }\
+} while(0)
+
+#else
+  #define ER(x,e) if ((e = (x)) != NULL) return e
+  #define EL(x, e, l) if ((e = (x)) != NULL) goto l
+#endif

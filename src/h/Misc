@@ -1,0 +1,4 @@
+extern int next_string(char *text, char *buffer, int context);
+extern char *strdup(char *);
+extern int sprite_bpp(SpriteCtrlBlock *spr);
+extern int sprite_pixel_width(SpriteCtrlBlock *spr);

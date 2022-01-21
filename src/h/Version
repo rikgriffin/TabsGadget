@@ -1,0 +1,5 @@
+#define Module_MajorVersion_CMHG     	0.12
+#define Module_MinorVersion_CMHG	© Rik Griffin 2004-11
+#define Module_Date_CMHG      		30 Nov 2011
+
+#define MODULE_VERSION                  12

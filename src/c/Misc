@@ -1,0 +1,86 @@
+/* Tabs:Misc.c			*/
+/* Rik Griffin Nov 2003		*/
+
+//#include "MemCheck:MemCheck.h"
+
+#include <string.h>
+
+#include "kernel.h"
+#include "swis.h"
+
+#include "toolbox.h"
+#include "window.h"
+#include "wimplib.h"
+
+#include "glib.h"
+
+#include "Main.h"
+#include "Misc.h"
+
+
+
+char *strdup(char *a) {
+  char *b;
+  int len;
+  len = strlen(a) + 1;
+  if ((b = _mem_allocate(len)) == NULL) return NULL;
+  memcpy(b, a, len);
+  return b;
+}
+
+
+int next_string(char *text, char *buffer, int context) {
+  int i, j;
+
+  if (context < 0) {
+    buffer[0] = '\0';
+    return -1;
+  }
+
+  j = 0;
+  i = context;
+
+  while (text[i] >= ' ' && text[i] != ',') {
+    buffer[j++] = text[i++];
+  }
+  buffer[j++] = '\0';
+
+
+  if (text[i] < ' ') return -1;
+
+  return i + 1;
+}
+
+
+/* note this returns 32 for true colour sprites, not 24	*/
+int sprite_bpp(SpriteCtrlBlock *spr) {
+  int log2bpp;
+
+  if ((spr->mode >> 27) > 0) {
+    /* new format sprite	*/
+    return (1 << ((spr->mode >> 27) - 1));
+  }
+
+  /* old format sprite	*/
+//  if (spr->mode < 47) return mode_table[spr->mode];
+  if (_swix(OS_ReadModeVariable, _INR(0,1) | _OUT(2), spr->mode, 9, &log2bpp) == NULL) {
+    return (1 << log2bpp);
+  }
+
+  return 0;
+}
+
+
+/* returns the width of a sprite in pixels, taking wastage into account	*/
+int sprite_pixel_width(SpriteCtrlBlock *spr) {
+  int bpp, lwaste, rwaste, width;
+
+  bpp = sprite_bpp(spr);
+
+  lwaste = spr->first_bit_used / bpp;
+  rwaste = (32 - spr->last_bit_used) / bpp;
+
+  width = (spr->width + 1) * (32 / bpp) - (lwaste + rwaste);
+
+  return width;
+}

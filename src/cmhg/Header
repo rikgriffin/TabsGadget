@@ -1,0 +1,25 @@
+#include "Version.h"
+#include "Rikslib:Services.h"
+
+help-string:	Tabs Module_MajorVersion_CMHG Module_MinorVersion_CMHG
+
+title-string:	Tabs
+
+date-string:	Module_Date_CMHG
+
+initialisation-code:	initialise
+
+finalisation-code:	finalise
+
+;module-is-runnable:
+
+swi-chunk-base-number:	0x1402C0
+
+swi-handler-code:	swi_handler
+
+swi-decoding-table:	Tabs,Method,Filter
+
+service-call-handler:	service_handler	Service_WindowModuleStarting,
+					Service_RedrawingWindow,
+					Service_ModeChange
+

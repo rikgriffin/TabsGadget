@@ -1,0 +1,126 @@
+/* Tabs:M_Method.c		*/
+/* Rik Griffin Nov 2003		*/
+
+//#include "MemCheck:MemCheck.h"
+
+#include <string.h>
+
+#include "kernel.h"
+#include "swis.h"
+
+#include "toolbox.h"
+#include "window.h"
+#include "wimplib.h"
+
+#include "glib.h"
+
+#include "Main.h"
+
+
+/* Registers used in the block are:
+   r0 = flags
+   r1 = object id
+   r2 = method code
+   r3 = component Id
+   r4 - r9 = method specific
+*/
+
+
+#if Debug_On
+static char *Debug_Method_Codes[] = {
+  "Tabs_SetState",
+  "Tabs_GetState",
+  "Tabs_SetSelected",
+  "Tabs_GetSelected",
+  "Tabs_TabFromWindow",
+  "Tabs_WindowFromTab",
+  "Tabs_SetLabel",
+  "Tabs_GetLabel",
+  "Tabs_HideTab"
+};
+#endif
+
+
+_kernel_oserror *_method(PrivateTabs *me, _kernel_swi_regs *r) {
+  _kernel_oserror *e = NULL;
+
+  DEBUG(0, ("Method code %x %s\n", r->r[2], Debug_Method_Codes[r->r[2] - Tabs_MethodBase]));
+
+  switch (r->r[2]) {
+    case Tabs_SetState :
+      ER(_set_state(me, r->r[4]), e);
+      break;
+
+    case Tabs_GetState :
+      r->r[0] = me->flags;
+      break;
+
+    case Tabs_SetSelected :
+      r->r[0] = me->selected;
+      if (r->r[4] < 0 || r->r[4] >= me->count) goto bad_index;
+      ER(tabs_change_selected(me, r->r[4]), e);
+      break;
+
+    case Tabs_GetSelected :
+      r->r[0] = me->selected;
+      break;
+
+    case Tabs_TabFromWindow : {
+      int i;
+      for (i = 0; i < me->count; i++) {
+        if (me->tabs[i].nested == r->r[4]) {
+          r->r[0] = i;
+          return NULL;
+        }
+      }
+      r->r[0] = -1;
+
+    } break;
+
+    case Tabs_WindowFromTab :
+      if (r->r[4] < 0 || r->r[4] >= me->count) goto bad_index;
+
+      r->r[0] = me->tabs[r->r[4]].nested;
+      break;
+
+    case Tabs_SetLabel :
+      if (r->r[4] < 0 || r->r[4] >= me->count) goto bad_index;
+      ER(tabs_set_text(me, r->r[4], (char *)r->r[5]), e);
+      break;
+
+    case Tabs_GetLabel :
+      if (r->r[4] < 0 || r->r[4] >= me->count) goto bad_index;
+
+      if (r->r[5] == 0) {
+        /* return buffer size required	*/
+        r->r[6] = strlen(me->tabs[r->r[4]].label) + 1;
+      } else {
+        /* fill the supplied buffer	*/
+        int i, len, buffsize = r->r[6];
+        char *buffer = (char *) r->r[5];
+
+        len = strlen(me->tabs[r->r[4]].label);
+
+        for (i = 0; i < len && i < buffsize; i++) {
+          buffer[i] = me->tabs[r->r[4]].label[i];
+          if (buffer[i] == '\0') break;
+        }
+        if (i == len) buffer[i] = '\0';
+        r->r[6] = i;
+      }
+
+      break;
+
+    case Tabs_HideTab :
+      if (r->r[4] < 0 || r->r[4] >= me->count) goto bad_index;
+      ER(tabs_hidetab(me, r->r[4], r->r[5]), e);
+
+      break;
+
+  }
+
+  return e;
+
+bad_index:
+  return (_kernel_oserror *)"   @Bad index";
+}

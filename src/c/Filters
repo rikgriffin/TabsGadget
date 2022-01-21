@@ -1,0 +1,390 @@
+/* Tabs:Filters.c		*/
+/* Rik Griffin Oct 2003		*/
+
+//#include "MemCheck:MemCheck.h"
+
+#include <stdlib.h>
+#include <string.h>
+
+#include "kernel.h"
+#include "swis.h"
+
+#include "toolbox.h"
+#include "window.h"
+#include "wimplib.h"
+
+#include "glib.h"
+
+#include "Main.h"
+
+
+#if Debug_On
+#define DEBUG_EVENT_CODE_MAX 20
+static char *Debug_Event_Codes[] = {
+  "Wimp_ENull",				// 0
+  "Wimp_ERedrawWindow",			// 1
+  "Wimp_EOpenWindow",			// 2
+  "Wimp_ECloseWindow",			// 3
+  "Wimp_EPointerLeavingWindow",		// 4
+  "Wimp_EPointerEnteringWindow",	// 5
+  "Wimp_EMouseClick",			// 6
+  "Wimp_EUserDrag",			// 7
+  "Wimp_EKeyPressed",			// 8
+  "Wimp_EMenuSelection",		// 9
+  "Wimp_EScrollRequest",		// 10
+  "Wimp_ELoseCaret",			// 11
+  "Wimp_EGainCaret",			// 12
+  "Wimp_EPollWordNonZero",		// 13
+  "", "", "",				// 14, 15, 16
+  "Wimp_EUserMessage",			// 17
+  "Wimp_EUserMessageRecorded",		// 18
+  "Wimp_EUserMessageAcknowledge"	// 19
+};
+#endif
+
+
+#define LIST_CHUNK	4
+
+
+static _kernel_oserror *grow_list(void) {
+  PrivateTabs **n;
+  int i, size;
+
+  DEBUG(3, ("growing tabs list: "));
+
+  if (TabsList == NULL) {
+    size = LIST_CHUNK * sizeof(PrivateTabs *);
+    if ((n = _mem_allocate(size)) == NULL) goto nomem;
+
+  } else {
+    size = (ListSize + LIST_CHUNK) * sizeof(PrivateTabs *);
+    if ((n = _mem_allocate(size)) == NULL) goto nomem;
+
+    memcpy(n, TabsList, ListSize * sizeof(PrivateTabs *));
+    _mem_free(TabsList);
+  }
+
+  for (i = ListSize; i < ListSize + LIST_CHUNK; i++) {
+    n[i] = NULL;
+  }
+
+  ListSize += LIST_CHUNK;
+  TabsList = n;
+
+  DEBUG(3, ("ok\n"));
+
+  return NULL;
+
+nomem:
+  DEBUG(3, ("failed\n"));
+  return (_kernel_oserror *)"   @malloc failed";
+}
+
+
+static PrivateTabs **find_list_entry_from_tabs(PrivateTabs *t) {
+  int i;
+  for (i = 0; i < ListSize; i++) {
+    if (TabsList[i] == t) return TabsList + i;
+  }
+  return NULL;
+}
+
+
+static PrivateTabs **find_list_entry_from_wimp(int wimp) {
+  int i;
+  for (i = 0; i < ListSize; i++) {
+    if (TabsList[i] != NULL) {
+      if (TabsList[i]->wimp_object == wimp) return TabsList + i;
+    }
+  }
+  return NULL;
+}
+
+
+_kernel_oserror *_add_tabs_to_list(PrivateTabs *me) {
+  _kernel_oserror *e;
+  PrivateTabs **l = NULL;
+
+  while (l == NULL) {
+    if ((l = find_list_entry_from_tabs(NULL)) == NULL) {
+      ER(grow_list(), e);
+    }
+  }
+
+  /* l points to free slot in the list	*/
+  *l = me;
+
+  DEBUG(0, ("Added tabs %x to global list\n", me));
+
+  return NULL;
+}
+
+
+void remove_tabs_from_list(PrivateTabs *me) {
+  PrivateTabs **l = NULL;
+
+  if ((l = find_list_entry_from_tabs(me)) != NULL) {
+    *l = NULL;
+    DEBUG(0, ("Removed Tabs %x from global list\n", me));
+  }
+}
+
+
+PrivateTabs *_tabs_from_wimp_window(int wimp) {
+  PrivateTabs **l;
+
+  l = find_list_entry_from_wimp(wimp);
+  if (l != NULL) return *l;
+
+  return NULL;
+}
+
+
+/* we need to find which virtual icon was clicked on	*/
+/* Mouse coords in the event block are screen absolute	*/
+static int _mouse_click(PrivateTabs *me, WimpMouseClickEvent *event, IdBlock *id) {
+  _kernel_oserror *e;
+
+  if (event->buttons == Wimp_MouseButtonMenu) {
+    ObjectId menu = 0;
+
+    window_get_menu(0, me->parent_id, &menu);
+    DEBUG(0, ("parent menu %x\n", menu));
+    if (menu != 0) {
+      toolbox_show_object(0, menu, Toolbox_ShowObject_Default, NULL, me->parent_id, me->component_id);
+    }
+  } else {
+    /* Select or Adjust							*/
+    /* The click might be on a scroll arrow which are real gadgets	*/
+    /* so we don't munge the id block until after we handle the click	*/
+
+    EL(tabs_click(me, event, id), e, fail);
+  }
+
+  /* update id block so client sees mouse click on its own window	*/
+  id->self_id = me->parent_id;
+  id->self_component = me->component_id;
+  event->window_handle = me->wimp_parent;
+  event->icon_handle = -1;
+
+  return 1;	// pass on the mouse click but with 'corrected' id block
+
+fail:
+  DEBUG(0, ("error in _mouse_click: %s\n", e->errmess));
+  return -1;
+}
+
+
+int _key_pressed(PrivateTabs *me, WimpKeyPressedEvent *event) {
+  IGNORE(event);
+  IGNORE(me);
+  return 0;
+}
+
+
+/* set the extent of our window and show it with toolbox_show_object	*/
+_kernel_oserror *_show(PrivateTabs *me) {
+  _kernel_oserror  *e;
+  WindowShowObjectBlock show;
+  WimpGetWindowStateBlock parent_state, my_state;
+  BBox extent;
+  int pixel_x, pixel_y, ip;
+
+  if (VScrollSize == 0 || XEig == -1) {
+    find_tool_sizes(NULL, &VScrollSize, &HScrollSize);
+    find_screen_eigs(&XEig, &YEig);
+    pixel_x = (1 << XEig);	// sizes of pixels in OS units
+    pixel_y = (1 << YEig);
+
+    VScrollSize -= pixel_x;
+    HScrollSize -= pixel_y;
+  }
+
+  DEBUG(3, ("\n_show: scrollbar size: %d %d  xeig: %d yeig: %d\n", VScrollSize, HScrollSize, XEig, YEig));
+
+  /* check if new extent is bigger than visible area		*/
+  /* and if so, add scrollbars.					*/
+
+  DEBUG(3, ("gadget bbox: %d %d %d %d\n", me->box.xmin, me->box.ymin, me->box.xmax, me->box.ymax));
+
+  extent.xmin = 0;
+  extent.xmax = me->box.xmax - me->box.xmin;
+  extent.ymin = -(me->box.ymax - me->box.ymin);
+  extent.ymax = 0;
+  ER(window_set_extent(0, me->object_id, &extent), e);
+  DEBUG(3, ("set window extent: %d x %d\n", extent.xmax, extent.ymin));
+
+  my_state.window_handle = me->wimp_object;
+  ER(wimp_get_window_state(&my_state), e);
+
+  parent_state.window_handle = me->wimp_parent;
+  ER(wimp_get_window_state(&parent_state), e);
+
+  ip = parent_state.visible_area.xmin - parent_state.xscroll;
+  show.visible_area.xmin = me->box.xmin + ip;
+  show.visible_area.xmax = me->box.xmax + ip;
+
+  ip = parent_state.visible_area.ymax - parent_state.yscroll;
+  show.visible_area.ymin = me->box.ymin + ip;
+  show.visible_area.ymax = me->box.ymax + ip;
+
+  DEBUG(3, ("show bbox: %d %d %d %d\n", show.visible_area.xmin, show.visible_area.ymin,
+    show.visible_area.xmax, show.visible_area.ymax));
+
+  show.xscroll = my_state.xscroll;
+  show.yscroll = my_state.yscroll;
+
+  show.behind = -1;
+  show.window_flags = 0;
+  show.parent_window_handle = me->wimp_parent;
+  show.alignment_flags = 0;
+
+  ER(toolbox_show_object(Toolbox_ShowObject_AsSubWindow, me->object_id,
+    Toolbox_ShowObject_FullSpec, &show, me->parent_id, -1), e);
+
+  DEBUG(3, ("done\n\n"));
+  return NULL;
+}
+
+
+static int tabs_message_filter(WimpMessage *message, IdBlock *id) {
+  int i;
+
+  IGNORE(id);
+
+  DEBUG(3, ("WimpMessage: %x\n", message->hdr.action_code));
+
+  switch (message->hdr.action_code) {
+    case Wimp_MFontChanged :
+
+      for (i = 0; i < ListSize; i++) {
+        if (TabsList[i] != NULL) {
+          tabs_set_bboxes(TabsList[i]);
+          tabs_check_xsize(TabsList[i]);
+        }
+      }
+      break;
+  }
+
+
+  return 0;
+}
+
+
+/*
+   This routine handles the filters we have installed (via the toolbox)
+   on various events and messages. Our gadget is a nested wimp window, so the
+   client app will get events referring to this window's handle. We look up which
+   gadget the event refers to based on the wimp handle and then take appropriate
+   action.
+
+   entry conditions:
+   r0 =  event code
+   r1 -> event block
+   r2    undefined ?
+   r3 -> id block for the event
+
+   exit conditions:
+   r0 = 0 if we haven't done anything
+        1 if we have upated the IdBlock
+       -1 to claim the event so client app doesn't see it
+*/
+#ifdef MemCheck_MEMCHECK
+static int _filter2(_kernel_swi_regs *regs) {
+#else
+int _filter(_kernel_swi_regs *regs) {
+#endif
+  ToolboxEvent	*event		= (ToolboxEvent *)regs->r[1];
+  IdBlock	*id_block	= (IdBlock *)regs->r[3];
+  int		event_code	= regs->r[0];
+  PrivateTabs *me;
+
+  DEBUG(3, ("\ntabs_filter: event_code = %d (%s)\n", event_code,
+    event_code == 0x200 ? "Wimp_EToolboxEvent" :
+    (event_code < DEBUG_EVENT_CODE_MAX ? Debug_Event_Codes[event_code] : "?")
+  ));
+  DEBUG(3, ("id_block: self_id %08x  self_component: %08x\n", id_block->self_id,
+    id_block->self_component));
+  DEBUG(3, ("          parent_id %08x  ancestor_id: %08x\n", id_block->parent_id,
+    id_block->ancestor_id));
+
+  if (event_code == Wimp_EMouseClick) {
+    #define EVENT	((WimpMouseClickEvent *)event)
+    me = _tabs_from_wimp_window(EVENT->window_handle);
+    if (me == NULL) return 0;	// wasn't for us, pass on to client
+
+    return _mouse_click(me, EVENT, id_block);
+
+    #undef EVENT
+
+//  } else if (event_code == Wimp_EKeyPressed) {
+//    #define EVENT ((WimpKeyPressedEvent *)event)
+//    me = _tabs_from_wimp_window(EVENT->caret.window_handle);
+//    if (me == NULL) return 0;	// wasn't for us, pass on to client
+//
+//    /* alter id block so client sees the key press in the correct gadget	*/
+//    id_block->self_id = me->parent_id;
+//    id_block->self_component = me->component_id;
+//    return _key_pressed(me, EVENT);
+//    #undef EVENT
+
+  } else if (event_code == Wimp_ERedrawWindow) {
+    #define EVENT ((WimpRedrawWindowRequestEvent *)event)
+    me = _tabs_from_wimp_window(EVENT->window_handle);
+    if (me == NULL) return 0;	// wasn't for us, pass on to client
+
+    /* redraw our gadget	*/
+    _redraw(me, EVENT);
+
+    /* The client doesn't want to redraw this window, so claim event	*/
+    return -1;
+    #undef EVENT
+
+//  } else if (event_code == Wimp_EUserDrag) {
+//    #define EVENT ((WimpUserDragBoxEvent *)event)
+//    /*
+//       a drag that the application has started has ended. If we initiated the drag
+//       we need to have remembered the fact and then filter the event so the app
+//       doesn't get this event for a drag it knows nothing about.
+//    */
+//    /*
+//    if (dragging) {
+//      handle_drag(blah blah)
+//      return -1;
+//    }
+//    */
+//
+//    /* If we weren't dragging it must be the client so pass on the event	*/
+//    return 0;
+//    #undef EVENT
+
+  /* wimp message handler	*/
+  } else if (event_code == Wimp_EUserMessage || event_code == Wimp_EUserMessageRecorded){
+    return tabs_message_filter((WimpMessage *)regs->r[1], id_block);
+
+  } else if (event_code == Wimp_EToolboxEvent) {
+    /* toolbox event filter handlers	*/
+
+  } // end if (event_code)
+
+
+  return 0;
+}
+
+
+
+#ifdef MemCheck_MEMCHECK
+int _filter(_kernel_swi_regs *r) {
+  int claim;
+
+  MemCheck_RegisterMiscBlock((void*)r->r[1], 256);
+  MemCheck_RegisterMiscBlock((void*)r->r[3], sizeof(IdBlock));
+
+  claim = _filter2(r);
+
+  MemCheck_UnRegisterMiscBlock((void*)r->r[1]);
+  MemCheck_UnRegisterMiscBlock((void*)r->r[3]);
+
+  return claim;
+}
+#endif

@@ -1,0 +1,125 @@
+/* Tabs:M_Plot.c		*/
+/* Rik Griffin Nov 2003		*/
+
+//#include "MemCheck:MemCheck.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#include "kernel.h"
+#include "swis.h"
+
+#include "toolbox.h"
+#include "window.h"
+#include "wimplib.h"
+
+#include "glib.h"
+
+#include "Main.h"
+#include "Misc.h"
+
+#define vdu(x) do { _swix(OS_WriteC, _IN(0), x); } while (0)
+#define vdu2(x) do { _swix(OS_WriteC, _IN(0), x & 0xff); _swix(OS_WriteC, _IN(0), ((x & 0xff00) >> 8)); } while (0)
+#define MIN(a, b) (a < b ? a : b)
+#define MAX(a, b) (a > b ? a : b)
+
+static char *FlagNames[] = {
+  "Tabs_AllowScrollArrows",
+  "oops"
+};
+
+/* This is called when ResEd wants us to plot the gadget.		*/
+/* This will be called from within ResEd's redraw loop, which is why 	*/
+/* we trap Service_RedrawingWindow to get the handle of the window.	*/
+_kernel_oserror *_plot(Tabs *templ) {
+  _kernel_oserror  *e;
+  WimpGetWindowStateBlock state;
+  BBox box, gw;
+  char text[256], buffer[256];
+  int i, context, flagcount;
+  struct {
+    int xmin, ymin, xmax, ymax, xeig, yeig, end;
+  } oldg = { 0x80, 0x81, 0x82, 0x83, 4, 5, -1 };
+
+
+  if (RedrawingWindow == 0) return NULL;
+
+  state.window_handle = RedrawingWindow;
+  ER(wimp_get_window_state(&state), e);
+
+  box = templ->hdr.box;
+  box.xmax -= 2;
+  box.ymax -= 2;
+  work_to_screen(&box, &state);
+
+/*
+  if (templ->hdr.flags & Gadget_Faded) {
+    back = faded_background_colour(templ->foreground, templ->background);
+    fore = templ->foreground;
+  } else {
+    back = templ->background;
+    fore = templ->foreground;
+  }
+*/
+  ER(_swix(Wimp_SetColour, _IN(0), (1<<7) | templ->background_wimp), e);
+  ER(_swix(Wimp_SetColour, _IN(0), templ->foreground_wimp), e);
+
+  ER(_swix(OS_Plot, _INR(0,2), PLOT_MOVE, box.xmin, box.ymin), e);
+  ER(_swix(OS_Plot, _INR(0,2), PLOT_RECTANGLE_FILL | PLOT_BACK, box.xmax, box.ymax), e);
+
+  ER(_swix(OS_Plot, _INR(0,2), PLOT_DRAW, box.xmin, box.ymax), e);
+  ER(_swix(OS_Plot, _INR(0,2), PLOT_DRAW, box.xmin, box.ymin), e);
+  ER(_swix(OS_Plot, _INR(0,2), PLOT_DRAW, box.xmax, box.ymin), e);
+  ER(_swix(OS_Plot, _INR(0,2), PLOT_DRAW, box.xmax, box.ymax), e);
+
+  /* This is all a bit dodgy, but it's useful to see the flags in ResEd	*/
+
+  ER(_swix(OS_ReadVduVariables, _INR(0,1), &oldg, &oldg), e);
+  oldg.xmin <<= oldg.xeig;
+  oldg.ymin <<= oldg.yeig;
+  oldg.xmax <<= oldg.xeig;
+  oldg.ymax <<= oldg.yeig;
+
+  gw.xmin = MAX(box.xmin, oldg.xmin);
+  gw.ymin = MAX(box.ymin, oldg.ymin);
+  gw.xmax = MIN(box.xmax, oldg.xmax);
+  gw.ymax = MIN(box.ymax, oldg.ymax);
+
+  vdu(24);
+  vdu2(gw.xmin);
+  vdu2(gw.ymin);
+  vdu2(gw.xmax);
+  vdu2(gw.ymax);
+
+  for (i = 0; (TabsValidFlags & (1<<i)) != 0; i++) {
+    snprintf(text, 256, "%s: %s", FlagNames[i], templ->hdr.flags & (1<<i) ? "on" : "off");
+    ER(_swix(Wimp_TextOp, _INR(0,5), 2, text, -1, -1, box.xmin+16, box.ymax -32*(i+1)),
+      e);
+  }
+
+  flagcount = i;
+  context = 0;
+  i = 0;
+
+  //MemCheck_RegisterMiscBlock_String(templ->text);
+
+  while (templ->text != NULL && context != -1) {
+    context = next_string(templ->text, buffer, context);
+    if (buffer[0] != '\0') {
+      snprintf(text, 256, "Tab %d: Object: %s", i, buffer);
+      ER(_swix(Wimp_TextOp, _INR(0,5), 2, text, -1, -1, box.xmin+16,
+        box.ymax - 32 * (i + 1 + flagcount)), e);
+      i++;
+    }
+  }
+
+  //MemCheck_UnRegisterMiscBlock(templ->text);
+
+  vdu(24);
+  vdu2(oldg.xmin);
+  vdu2(oldg.ymin);
+  vdu2(oldg.xmax);
+  vdu2(oldg.ymax);
+
+  return NULL;
+}

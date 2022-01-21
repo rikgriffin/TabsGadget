@@ -1,0 +1,48 @@
+/* Tabs:M_SetState.c		*/
+/* Rik Griffin Nov 2003		*/
+
+//#include "MemCheck:MemCheck.h"
+
+
+#include "kernel.h"
+#include "swis.h"
+
+#include "toolbox.h"
+#include "window.h"
+#include "wimplib.h"
+
+#include "glib.h"
+
+#include "Main.h"
+
+
+/* updates our gadget flags and changes the window as required	*/
+/* This can only remove existing scrollbars if the AllowxScroll	*/
+/* flag is cleared, it will not add new ones.			*/
+_kernel_oserror *_set_state(PrivateTabs *me, unsigned int new_flags) {
+  _kernel_oserror *e;
+  unsigned int changed;
+
+  changed = me->flags ^ new_flags;
+
+  DEBUG(0, ("_set_state, changed flags = %x\n", changed));
+  if (changed == 0) return NULL;
+
+  me->flags = new_flags;
+
+  if (changed & Tabs_AllowScrollArrows) {
+    ER(tabs_check_xsize(me), e);
+  }
+
+  /* fading currently doesn't do anything			*/
+  /* should probably disable clicking or something like that	*/
+  if (changed & Gadget_Faded) {
+    if (new_flags & Gadget_Faded) {
+      DEBUG(3, ("faded\n"));
+    } else {
+      DEBUG(3, ("unfaded\n"));
+    }
+  }
+
+  return NULL;
+}

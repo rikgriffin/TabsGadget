@@ -1,0 +1,137 @@
+/* Tabs:Veneers.c		*/
+/* Rik Griffin Nov 2003		*/
+
+#include "kernel.h"
+#include "swis.h"
+
+#include "toolbox.h"
+#include "window.h"
+#include "wimplib.h"
+
+#include "Tabs.h"
+
+
+_kernel_oserror *tabs_set_state (
+  unsigned int flags,
+  ObjectId window,
+  ComponentId gadget,
+  unsigned int state
+) {
+
+  return _swix(Toolbox_ObjectMiscOp, _INR(0,4),
+      flags, window, Tabs_SetState, gadget, state);
+}
+
+
+_kernel_oserror *tabs_get_state (
+  unsigned int flags,
+  ObjectId window,
+  ComponentId gadget,
+  unsigned int *state
+) {
+  unsigned int dummy;
+
+  return _swix(Toolbox_ObjectMiscOp, _INR(0,3) | _OUT(0),
+      flags, window, Tabs_GetState, gadget,
+      state == NULL ? &dummy : state);
+}
+
+
+_kernel_oserror *tabs_set_selected (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		tab_index,
+  int		*previous_index
+) {
+  int dummy;
+
+  return _swix(Toolbox_ObjectMiscOp, _INR(0,4) | _OUT(0),
+      flags, window, Tabs_SetSelected, gadget, tab_index,
+      previous_index == NULL ? &dummy : previous_index);
+}
+
+
+_kernel_oserror *tabs_get_selected (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		*index
+) {
+  int dummy;
+
+  return _swix(Toolbox_ObjectMiscOp, _INR(0,3) | _OUT(0),
+      flags, window, Tabs_GetSelected, gadget,
+      index == NULL ? &dummy : index);
+}
+
+
+_kernel_oserror *tabs_tab_from_window (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  ObjectId	nested_window,
+  int		*tab_index
+) {
+  int dummy;
+
+  return _swix(Toolbox_ObjectMiscOp, _INR(0,4) | _OUT(0),
+    flags, window, Tabs_TabFromWindow, gadget, nested_window,
+    tab_index == NULL ? &dummy : tab_index);
+}
+
+
+_kernel_oserror *tabs_window_from_tab (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		tab_index,
+  ObjectId	*nested_window
+) {
+  ObjectId dummy;
+
+  return _swix(Toolbox_ObjectMiscOp, _INR(0,4) | _OUT(0),
+    flags, window, Tabs_WindowFromTab, gadget, tab_index,
+    nested_window == NULL ? &dummy : nested_window);
+}
+
+
+_kernel_oserror *tabs_set_label (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		index,
+  char		*text
+) {
+  return _swix(Toolbox_ObjectMiscOp, _INR(0,5),
+    flags, window, Tabs_SetLabel, gadget, index, text);
+}
+
+
+_kernel_oserror *tabs_get_label (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		index,
+  char		*buffer,
+  int		buffsize,
+  int		*nbytes
+) {
+  int dummy;
+
+  return _swix(Toolbox_ObjectMiscOp, _INR(0,6) | _OUT(6),
+    flags, window, Tabs_GetLabel, gadget, index, buffer, buffsize,
+    nbytes == NULL ? &dummy : nbytes);
+}
+
+
+_kernel_oserror *tabs_hide_tab (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		index,
+  int		hide
+) {
+  return _swix(Toolbox_ObjectMiscOp, _INR(0,5),
+    flags, window, Tabs_HideTab, gadget, index, hide);
+}

@@ -1,0 +1,50 @@
+/* Tabs:M_Remove.c		*/
+/* Rik Griffin Nov 2003		*/
+
+//#include "MemCheck:MemCheck.h"
+
+
+#include "kernel.h"
+#include "swis.h"
+
+#include "toolbox.h"
+#include "window.h"
+#include "wimplib.h"
+
+#include "glib.h"
+
+#include "Main.h"
+
+
+_kernel_oserror *_remove(int recurse_flag, PrivateTabs *me) {
+
+  IGNORE(recurse_flag);
+
+  DEBUG(3, ("_remove: %x  recurse: %d\n", me, recurse_flag));
+
+  /* remove the gadget being deleted from our list	*/
+//  if ((e = remove_redraw_handler(me)) != NULL) return e;
+
+  /* Get the toolbox to uninstall the post filters	*/
+  remove_task_interest(GLib_WimpEvents, Filter_WimpEvents);
+//  remove_task_interest(GLib_ToolboxEvents, Filter_ToolboxEvents);
+  remove_task_interest(GLib_WimpMessages, Filter_WimpMessages);
+
+  DEBUG(3, ("removed toolbox filters\n"));
+
+  remove_tabs_from_list(me);
+
+  /* delete the tabs data and attached objects		*/
+  tabs_delete(me);
+
+  /* delete our window	*/
+  toolbox_delete_object(0, me->object_id);
+
+  //MemCheck_UnRegisterMiscBlock(me);
+
+  _mem_free(me);
+
+  DEBUG(3, ("Deleted Tabs gadget handle %08x\n", me));
+
+  return NULL;
+}

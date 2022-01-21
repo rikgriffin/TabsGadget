@@ -1,0 +1,169 @@
+/* Tabs:M_Add.c			*/
+/* Rik Griffin Oct 2003		*/
+
+//#include "MemCheck:MemCheck.h"
+
+
+#include "kernel.h"
+#include "swis.h"
+
+#include "toolbox.h"
+#include "window.h"
+#include "wimplib.h"
+
+#include "glib.h"
+
+#include "Main.h"
+
+
+static int IconList[] = { -1 };
+
+
+static const WindowTemplate Tabs_Window_Template = {
+  /* This is a block as passed to Toolbox_CreateObject for a Window object	*/
+    1<<1 | 1<<2, 		// flags (Auto open, auto close)
+    NULL,		// help_message
+    0, 			// max_help
+    NULL,		// pointer_shape
+    0,			// max_pointer_shape
+    0,			// pointer_x_hot
+    0,			// pointer_y_hot
+    NULL,		// no menu
+    0,			// num_keyboard_shortcuts
+    NULL,		// keyboard_shortcuts
+    0,			// num_gadgets
+    NULL,		// gadgets
+    -1,			// default_focus
+    0,			// show_event
+    0,			// hide_event
+    NULL,		// toolbar_ibl
+    NULL,		// toolbar_itl
+    NULL,		// toolbar_ebl
+    NULL,		// toolbar_etl
+    {
+        // WimpWindow struct
+        { 0, -100, 0, 0 },	// visible_area
+        0,			// xscroll
+        0,			// yscroll
+        -1,			// behind
+        WimpWindow_NewFormat   	// flags
+        | WimpWindow_NoBounds
+//        | WimpWindow_VScroll
+//        | WimpWindow_HScroll
+//        | WimpWindow_AutoRedraw
+        ,
+        0xff,			// title_fg (0xff means no window frame)
+        0xff,			// title_bg
+        0xff,			// work_fg
+        0x01,			// work_bg
+        3,			// scroll_outer
+        1,			// scroll_inner
+        12,			// highlight_by
+        0,			// reserved
+        {0, (int)0x80000000, 0x7fffffff, 0},	// extent
+        0,			// title_flags
+        3 * WimpIcon_ButtonType,// work_flags
+        0,			// sprite_area (1 = wimp)
+        1,			// min_width
+        1,			// min_height
+        {
+            // WimpIconData for title bar
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        },
+        0			// number of icons
+    }
+};
+
+
+static const ObjectTemplateHeader Tabs_Object_Template = {
+  Window_ObjectClass,		// object_class
+  0,				// flags
+  102,				// version
+  "__tabs",			// name (limit 12 chars"
+  sizeof(ObjectTemplateHeader) + sizeof(WindowTemplate),	// total size
+  NULL,				// body
+  0				// size of body
+};
+
+
+/* called in response to the GADGET_ADD reason code from the Toolbox	*/
+/* has to return a handle and an icon list				*/
+/* If we don't create any icons (we don't) return a list containing -1	*/
+_kernel_oserror *_add(Tabs *templ, ObjectId parent,
+unsigned int wimp_window, int *r_handle, int **r_icons) {
+  _kernel_oserror *e;
+  PrivateTabs *me;		// our internal object
+
+  /* allocate memory from the Toolbox pool	*/
+  me = (PrivateTabs *) _mem_allocate(sizeof(PrivateTabs));
+  if (me == NULL) return (_kernel_oserror *)"   @No memory for Tabs gadget";
+
+  //MemCheck_RegisterMiscBlock(me, sizeof(PrivateTabs));
+
+  /* setup default state for the gadget		*/
+  me->box = templ->hdr.box;
+  me->parent_id = parent;
+  me->component_id = templ->hdr.component_id;
+  me->type = templ->hdr.type;
+
+  /* create a new window object			*/
+  {
+    WindowTemplate window;
+    ObjectTemplateHeader object;
+
+    window = Tabs_Window_Template;
+    object = Tabs_Object_Template;
+    object.body = &window;
+    object.body_size = sizeof(window);
+//    window.window.work_fg = templ->foreground_wimp & 0xf;
+//    window.window.work_bg = templ->background_wimp & 0xf;
+    window.window.sprite_area = (void *) Sprites;
+
+    EL(toolbox_create_object(1, &object, &me->object_id), e, fail);
+    EL(window_get_wimp_handle(0, me->object_id, &me->wimp_object), e, fail);
+  }
+
+  me->wimp_parent = wimp_window;
+
+  me->foreground_wimp = templ->foreground_wimp & 0xf;
+  me->background_wimp = templ->background_wimp & 0xf;
+
+  me->tabs = NULL;
+  me->list_size = 0;
+  me->count = 0;
+  me->selected = -1;
+  me->max_visible = -1;
+  me->base_visible = -1;
+  me->has_arrows = 0;
+
+  /* return the things the toolbox needs	*/
+  *r_handle = (int)me;
+  *r_icons = IconList;
+
+  /* this merely adds the private data structure to a list
+     of all the current gadgets maintained by this module	*/
+  EL(_add_tabs_to_list(me), e, fail);
+
+  /* GLib functions to install Toolbox Post Filters	*/
+  add_task_interest(GLib_WimpEvents, Filter_WimpEvents, Tabs_Filter);
+//  add_task_interest(GLib_ToolboxEvents, Filter_ToolboxEvents, Tabs_Filter);
+  add_task_interest(GLib_WimpMessages, Filter_WimpMessages, Tabs_Filter);
+
+  EL(tabs_create(me, templ), e, fail);
+
+  _show(me);
+  EL(tabs_update_display(me), e, fail);
+
+  me->flags = 0;
+  EL(_set_state(me, templ->hdr.flags), e, fail);
+
+  DEBUG(2, ("Created Tabs gadget, handle %08x, internal data:\n", me));
+  DEBUG(2, ("parent_id: %08x\ncomponent_id: %08x\nobject_id: %08x\nflags: %08x\ntype: %08x\n", me->parent_id, me->component_id, me->object_id, me->flags, me->type));
+  DEBUG(2, ("wimp_object: %08x\nwimp_parent: %08x\nforeground: %08x\nbackground: %08x\n", me->wimp_object, me->wimp_parent, me->foreground_wimp, me->background_wimp));
+
+  return NULL;
+
+fail:
+  _mem_free(me);
+  return e;
+}

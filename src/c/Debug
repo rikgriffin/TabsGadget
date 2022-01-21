@@ -1,0 +1,66 @@
+/* Tabs.Debug.c			*/
+/* Rik Griffin Mar 2004		*/
+//#include "MemCheck:MemCheck.h"
+
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "Main.h"
+
+
+#if Debug_On
+void debug_fn(char *format, ...) {
+  va_list ap;
+  FILE *f;
+  if ((f = fopen("Tabs:Debug", "a+")) != NULL) {
+    va_start(ap, format);
+    vfprintf(f, format, ap);
+    va_end(ap);
+    fclose(f);
+  }
+}
+#endif
+
+
+#ifdef MemCheck_MEMCHECK
+
+
+void *mem_allocate_wrapper(int x, char *file, int line) {
+  void *r;
+  r = mem_allocate(x);
+  MemCheck_RegisterMiscBlock(r, x);
+#if Debug_On
+  if (r != NULL) DEBUG(0, ("allocate: %08x %s %d\n", r, file, line));
+  else DEBUG(0, ("failed malloc: %s %d\n", file, line));
+#endif
+  return r;
+}
+
+
+void mem_free_wrapper(void *x, char *file, int line) {
+  MemCheck_UnRegisterMiscBlock(x);
+#if Debug_On
+  if (x != NULL) DEBUG(0, ("free: %08x %s %d\n", x, file, line));
+#endif
+  mem_free(x);
+}
+
+
+void *mem_extend_wrapper(void *x, int y, char *file, int line) {
+  void *r;
+  r = mem_extend(x, y);
+/*
+  MemCheck_UnRegisterMiscBlock(x);
+  MemCheck_RegisterMiscBlock(r, y);
+*/
+#if Debug_On
+  if (x != NULL) DEBUG(0, ("free: %08x %s %d\n", x, file, line));
+  if (r != NULL) DEBUG(0, ("allocate: %08x %s %d\n", r, file, line));
+  else DEBUG(0, ("failed realloc: %s %d\n", file, line));
+#endif
+  return r;
+}
+
+
+#endif	// MemCheck_MEMCHECK

@@ -1,0 +1,31 @@
+/* Tabs:TabsSettings.h		*/
+/* Rik Griffin Nov 2003		*/
+
+#define TAB_YSIZE		48
+
+/* border above top of tabs (included in YSize)		*/
+#define TAB_TOPBORDER		4
+
+/* Border to left of all tabs		*/
+#define TAB_LEFTBORDER		6
+
+/* Border to right of all tabs		*/
+#define TAB_RIGHTBORDER		16
+
+#define TAB_EXTRAXSIZE 		32
+
+#define ARROW_MINYSIZE		44
+#define ARROW_YPOS		0
+
+#define ARROW_MINXSIZE		32
+
+#define NEST_LEFTBORDER		6
+#define NEST_RIGHTBORDER	4
+#define NEST_BOTTOMBORDER	4
+#define NEST_TOPBORDER		(TAB_YSIZE + 2)
+
+#define HAS_LEFT_ARROW	(1u<<0)
+#define HAS_RIGHT_ARROW	(1u<<1)
+
+
+#define TABWIDTH(me,l) ((me)->tabs[l].box.xmax - (me)->tabs[l].box.xmin)

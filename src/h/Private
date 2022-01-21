@@ -1,0 +1,159 @@
+/* Tabs:Private.h		*/
+/* Rik Griffin Nov 2003		*/
+
+typedef struct {
+  int size;
+  int num_sprites;
+  int sprite_offset;
+  int free_offset;
+} SpriteArea;
+
+
+typedef struct {
+  int next_sprite;
+  char name[12];
+  int width;
+  int height;
+  int first_bit_used;
+  int last_bit_used;
+  int image_offset;
+  int mask_offset;
+  int mode;
+} SpriteCtrlBlock;
+
+
+typedef struct {
+  char		*label;
+  BBox		box;
+  ObjectId	nested;
+  int		nested_wimp;
+  int		xscroll, yscroll;
+  int		hidden;
+} TabData;
+
+
+/* The internal data structure for a Tabs object	*/
+typedef struct {
+  ObjectId	parent_id;		// id of parent window
+  ComponentId	component_id;		// our component id in parent window
+  ObjectId	object_id;		// our own window's id
+  BBox		box;			// our window's bbox in its parent
+
+  unsigned int	flags;
+  unsigned int	type;
+
+  int		wimp_object;		// our window's wimp handle
+  int		wimp_parent;		// our parent's wimp handle
+
+  unsigned int	foreground_wimp;
+  unsigned int	background_wimp;
+
+  int		count;			// tab count
+  TabData	*tabs;			// array of tabs
+  int		list_size;
+
+  int		selected;		// selected tab
+  int		max_visible;		// highest tab visible
+  int		base_visible;
+
+  unsigned int	has_arrows;
+  int		left_arrow_wimp;	// icon numbers of arrows
+  int		right_arrow_wimp;
+  int		left_xpos;		// x pos of first tab, varies with arrows
+
+} PrivateTabs;
+
+
+/* Misc functions	*/
+extern void find_tool_sizes(unsigned int *title, unsigned int *vscroll,
+  unsigned int *hscroll);
+extern void find_screen_eigs(unsigned int *xeig, unsigned int *yeig);
+extern void service_mode_change(void);
+extern unsigned int faded_background_colour(unsigned int fore, unsigned int back);
+extern void work_to_screen(BBox *wa, WimpGetWindowStateBlock *state);
+extern void screen_to_work(BBox *wa, WimpGetWindowStateBlock *state);
+
+/* wimp handling stuff etc	*/
+extern _kernel_oserror *_show(PrivateTabs *me);
+extern _kernel_oserror *_update_extent(PrivateTabs *me, int xextent, int yextent);
+extern void _redraw(PrivateTabs *me, WimpRedrawWindowRequestEvent *event);
+extern int _key_pressed(PrivateTabs *me, WimpKeyPressedEvent *event);
+
+extern PrivateTabs *_tabs_from_wimp_window(int wimp);
+extern _kernel_oserror *_add_tabs_to_list(PrivateTabs *me);
+extern void remove_tabs_from_list(PrivateTabs *me);
+extern _kernel_oserror *_make_icons(PrivateTabs *me, int redraw);
+extern _kernel_oserror *_force_redraw(PrivateTabs *me);
+
+extern void tabs_delete(PrivateTabs *me);
+extern _kernel_oserror *tabs_create(PrivateTabs *me, Tabs *templ);
+extern _kernel_oserror *tabs_set_bboxes(PrivateTabs *me);
+extern _kernel_oserror *tabs_click(PrivateTabs *me, WimpMouseClickEvent *event, IdBlock *id);
+extern _kernel_oserror *tabs_check_xsize(PrivateTabs *me);
+extern _kernel_oserror *tabs_update_display(PrivateTabs *me);
+extern _kernel_oserror *tabs_init(void);
+extern _kernel_oserror *tabs_change_selected(PrivateTabs *me, int new_tab);
+extern _kernel_oserror *tabs_set_text(PrivateTabs *me, int index, char *text);
+extern _kernel_oserror *tabs_hidetab(PrivateTabs *me, int index, int hidden);
+
+
+extern _kernel_oserror *_add (
+  /* in */
+  Tabs *templ,
+  ObjectId parent,
+  unsigned int wimp_window,
+  /* out */
+  int *r_handle,
+  int **r_icons
+);
+
+
+extern _kernel_oserror *_remove (
+  /* in */
+  int recurse,
+  PrivateTabs *me
+);
+
+
+extern _kernel_oserror *_plot (
+  /* in */
+  Tabs *templ
+);
+
+
+_kernel_oserror *_method (
+  /* in */
+  PrivateTabs *me,
+  _kernel_swi_regs *r
+);
+
+
+_kernel_oserror *_set_state (
+  /* in */
+  PrivateTabs *me,
+  unsigned int flags
+);
+
+
+extern int _filter(_kernel_swi_regs *r);
+
+#define PLOT_DRAW_RELATIVE	1
+#define PLOT_INVERSE_RELATIVE	2
+#define PLOT_MOVE		4
+#define PLOT_DRAW		5
+#define PLOT_BACK		7
+#define PLOT_INVERSE		6
+
+#define PLOT_LINE		0
+#define PLOT_DOTTED_LINE	16
+#define PLOT_TRIANGLE_FILL	80
+#define PLOT_RECTANGLE_FILL	96
+#define PLOT_ARC		160
+#define PLOT_SEGMENT		168
+#define PLOT_BLOCK_COPY		190
+#define PLOT_ELLIPSE		192
+#define PLOT_ELLIPSE_FILL	200
+
+extern unsigned int VScrollSize;
+extern unsigned int HScrollSize;
+extern unsigned int XEig, YEig;

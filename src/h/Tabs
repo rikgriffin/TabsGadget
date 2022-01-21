@@ -1,0 +1,168 @@
+/* Tabs:Tabs.h			*/
+/* © Rik Griffin 2003-2011	*/
+
+
+#ifndef __tabs_h
+#define __tabs_h
+
+#ifndef __kernel_h
+  #include "kernel.h"
+#endif
+
+#ifndef __toolbox_h
+  #include "toolbox.h"
+#endif
+
+#ifndef __window_h
+  #include "window.h"
+#endif
+
+
+typedef struct {
+  GadgetHeader	hdr;
+  unsigned int	foreground_wimp;
+  unsigned int	background_wimp;
+  char		*text;
+} Tabs;
+
+
+/* Tabs gadget flags				*/
+/* Note all gadgets share the same 		*/
+/* interpretation of flag bits 30 and 31	*/
+/* 30 : gadget is at back			*/
+/* 31 : gadget is faded				*/
+
+#define Tabs_AllowScrollArrows		(1u<<0)
+
+
+#define TabsValidFlags	(0\
+	| Tabs_AllowScrollArrows \
+	| Gadget_AtBack  \
+	| Gadget_Faded  \
+)
+
+
+/* Tabs methods	*/
+
+/* SWI chunk now offically allocated!	*/
+#define Tabs_SWIBase		0x001402c0
+#define Tabs_MethodBase		((Tabs_SWIBase & 0x000ffff0) >> 4)
+#define Tabs_EventBase		Tabs_SWIBase
+
+#define Tabs_Type		(((sizeof(Tabs)) << 16) | Tabs_MethodBase)
+#define Tabs_ObjectClass	Tabs_SWIBase
+
+
+/* Methods are numbered from MethodBase	*/
+enum {
+  Tabs_SetState = Tabs_MethodBase,		/* 0x402c = 16428	*/
+  Tabs_GetState, 				/* 0x402d = 16429	*/
+  Tabs_SetSelected,				/* 0x402e = 16430	*/
+  Tabs_GetSelected,				/* 0x402f = 16431	*/
+  Tabs_TabFromWindow,				/* 0x4030 = 16432	*/
+  Tabs_WindowFromTab,				/* 0x4031 = 16433	*/
+  Tabs_SetLabel,				/* 0x4032 = 16434	*/
+  Tabs_GetLabel,				/* 0x4033 = 16435	*/
+  Tabs_HideTab					/* 0x4034 = 16436	*/
+};
+
+
+/* Tabs events	*/
+#define TabsEvent_Selection	(Tabs_EventBase + 0)
+
+
+/* Tabs event data types	*/
+
+typedef struct {
+    ToolboxEventHeader	hdr;
+    unsigned int	flags;
+    int			selected;
+    int			previous;
+} TabsSelectionEvent;
+
+
+/* Tabs method veneers	*/
+/* By convention, all methods have the first three parameters as:	*/
+/* flags, window, component						*/
+
+extern _kernel_oserror *tabs_set_state (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  unsigned int	state
+);
+
+
+extern _kernel_oserror *tabs_get_state (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  unsigned int	*state
+);
+
+
+extern _kernel_oserror *tabs_set_selected (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		tab_index,
+  int		*previous_index
+);
+
+
+extern _kernel_oserror *tabs_get_selected (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		*index
+);
+
+
+extern _kernel_oserror *tabs_tab_from_window (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  ObjectId	nested_window,
+  int		*tab_index
+);
+
+
+extern _kernel_oserror *tabs_window_from_tab (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		tab_index,
+  ObjectId	*nested_window
+);
+
+
+extern _kernel_oserror *tabs_set_label (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		index,
+  char		*text
+);
+
+
+extern _kernel_oserror *tabs_get_label (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		index,
+  char		*buffer,
+  int		buffsize,
+  int		*nbytes
+);
+
+
+extern _kernel_oserror *tabs_hide_tab (
+  unsigned int	flags,
+  ObjectId	window,
+  ComponentId	gadget,
+  int		index,
+  int		hide
+);
+
+
+#endif	// ifndef __tabs_h

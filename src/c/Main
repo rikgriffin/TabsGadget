@@ -1,0 +1,351 @@
+/* Tabs.Main.c			*/
+/* Rik Griffin Nov 2003		*/
+
+//#include "MemCheck:MemCheck.h"
+//#include "HierProf:HierProf.h"
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+#define _main_c
+#include "Main.h"
+#include "Version.h"
+
+#include "Rikslib:Services.h"
+
+#include "C:RMEnsure.h"
+
+#if Debug_On
+#define DEBUG_METHOD_CODE_MAX 13
+static char *Debug_Method_Codes[] = {
+  "",			// 0
+  "GADGET_ADD",		// 1
+  "GADGET_REMOVE",	// 2
+  "GADGET_FADE",	// 3
+  "GADGET_METHOD",	// 4
+  "",			// 5
+  "GADGET_MCLICK",	// 6
+  "",			// 7
+  "",			// 8
+  "GADGET_PLOT",	// 9
+  "GADGET_SETFOCUS",	// 10
+  "GADGET_MOVE",	// 11
+  "GADGET_POSTADD",	// 12
+};
+#endif
+
+/* These are the Toolbox events we install Post Filters for	*/
+int Filter_ToolboxEvents[] = {
+    Toolbox_ObjectDeleted, Window_ObjectClass,
+    Window_AboutToBeShown, Window_ObjectClass,
+    -1
+};
+
+
+/* These are the Wimp events we install Post Filters for	*/
+int Filter_WimpEvents[] = {
+    Wimp_ERedrawWindow, 0,
+    Wimp_EMouseClick, 0,
+    -1
+};
+
+
+/* These are the Wimp Messages we install Post Filters for	*/
+int Filter_WimpMessages[] = {
+  Wimp_MFontChanged, 0,
+  -1
+};
+
+
+/* This is where we register our gadget types with the toolbox	*/
+static _kernel_oserror *register_gadgets(void) {
+  _kernel_oserror *e;
+  FeatureMask features;
+
+  /* Do this once for each gadget type we provide	*/
+
+  features.mask = 0;
+  features.bits.add    = PRIVATE_HANDLER;
+  features.bits.mclick = NO_HANDLER;
+  features.bits.method = PRIVATE_HANDLER;
+  features.bits.remove = PRIVATE_HANDLER;
+  features.bits.fade   = NO_HANDLER;
+  features.bits.plot   = PRIVATE_HANDLER;
+  features.bits.move   = NO_HANDLER;
+  features.bits.setfocus = NO_HANDLER;
+  ER(register_gadget_type(0, Tabs_Type, TabsValidFlags, features.mask,
+    Tabs_Method), e);
+
+  return NULL;
+}
+
+
+static _kernel_oserror *module_error(char *mod, char *ver) {
+  sprintf(GlobalError.errmess, "Tabs gadget requires %s version %s, and this cannot be loaded. Quit any running Toolbox applications and try again.", mod, ver);
+  GlobalError.errnum = 0;
+  return &GlobalError;
+}
+
+
+static _kernel_oserror *ensure_toolbox_mod(char *mod, char *ver) {
+  char path[256];
+
+  sprintf(path, "Toolbox.%s", mod);
+  return rmensure(mod, path, ver);
+}
+
+
+_kernel_oserror *initialise(const char *cmd_tail, int podule, void *pw) {
+  _kernel_oserror *e;
+
+  IGNORE(cmd_tail);
+  IGNORE(podule);
+  IGNORE(pw);
+
+  #if 0
+  MemCheck_Init();
+  MemCheck_InterceptSCLStringFunctions();
+  MemCheck_RedirectToFilename("Tabs:MemCheck");
+  MemCheck_SetStoreMallocFunctions(1);
+  MemCheck_SetStoreMiscFunctions(1);
+  MemCheck_RegisterMiscBlock((void *)0x01c00000, 0x00008000); // SVC stack (ro4)
+//  MemCheck_RegisterMiscBlock(__ctype, 0x100); // size right ??
+  MemCheck_SetQuitting(0,1);
+  #endif
+
+  #if Debug_On
+  {
+    FILE *f;
+    if ((f = fopen("Tabs:Debug", "w+")) != NULL) fclose(f);
+  }
+  #endif
+
+  ER(rmcheck("WindowManager", "3.98"), e);
+
+/*
+  if (ensure_toolbox_mod("Toolbox", "1.63") != NULL) {
+    return module_error("Toolbox", "1.63");
+  }
+  if (ensure_toolbox_mod("Window", "1.62") != NULL) {
+    return module_error("Window", "1.62");
+  }
+*/
+  if (ensure_toolbox_mod("Toolbox", "0.00") != NULL) {
+    return module_error("Toolbox", "0.00");
+  }
+  if (ensure_toolbox_mod("Window", "0.00") != NULL) {
+    return module_error("Window", "0.00");
+  }
+
+  /* initialise the embdded sprite area	*/
+  Sprites = (SpriteArea *)Sprites_c;
+  DEBUG(0, ("Sprite area size %d\n", Sprites->size));
+
+  ER(register_gadgets(), e);
+  ER(tabs_init(), e);
+
+  DEBUG(0, ("Registered Tabs gadget type: %08x  toolbox swi: %x\n", Tabs_Type,
+    Tabs_Method));
+
+  return NULL;
+}
+
+
+_kernel_oserror *finalise(int fatal, int podule, void *pw) {
+
+  IGNORE(fatal);
+  IGNORE(podule);
+  IGNORE(pw);
+
+  deregister_gadget_type(0, Tabs_Type, Tabs_Method);
+  if (TabsList != NULL) {
+    _mem_free(TabsList);
+    TabsList = NULL;
+  }
+
+  #if 0
+  MemCheck_OutputBlocksInfo();
+//  MemCheck_Finalise();
+  HierProf_OutputNow();
+  #endif
+
+  return NULL;
+}
+
+
+_kernel_oserror *swi_handler(int swi_no, _kernel_swi_regs *r, void *pw) {
+  _kernel_oserror *e = NULL;
+
+  IGNORE(pw);
+
+  DEBUG(3, ("\nSWI: %d\n", swi_no));
+  switch (swi_no + Tabs_00) {
+
+    case Tabs_Method :
+      /* method code is in r[2]		*/
+      DEBUG(2, ("Tabs_Method called with method code %d %s\n", r->r[2],
+        r->r[2] < DEBUG_METHOD_CODE_MAX ? Debug_Method_Codes[r->r[2]] : "UNKNOWN"));
+
+      switch (r->r[2]) {
+        case GADGET_ADD:
+          //MemCheck_RegisterMiscBlock((void*)r->r[3], sizeof(Tabs));
+
+          DEBUG(2, ("Create gadget type %x parent %x window handle %x\n", r->r[1], r->r[4], r->r[5]));
+
+          e = _add((Tabs *)r->r[3], r->r[4], r->r[5],
+            &(r->r[0]), (int **)&(r->r[1]));
+
+          //MemCheck_UnRegisterMiscBlock((void*)r->r[3]);
+          break;
+
+        /* no handler
+        case GADGET_MCLICK:
+          break;
+        */
+
+        case GADGET_METHOD:
+          e = _method((PrivateTabs *) r->r[3],(_kernel_swi_regs *)(r->r[4]));
+          break;
+
+        case GADGET_REMOVE:
+          e = _remove(r->r[0], (PrivateTabs *)r->r[3]);
+          break;
+
+        /* no handler
+        case GADGET_FADE:
+          break;
+        */
+
+        case GADGET_PLOT:
+          e = _plot((Tabs *)r->r[3]);
+          break;
+
+        /* no handler
+        case GADGET_MOVE:
+          break;
+        */
+
+        /* no handler
+        case GADGET_SETFOCUS:
+          break;
+        */
+      }	// end switch(r->r[2])
+
+      break;
+
+    case Tabs_Filter:
+      r->r[0] = _filter(r);
+      DEBUG(3, ("Returning %d from filter\n", r->r[0]));
+      break;
+
+  }	// end switch(swi_no)
+
+  if (e != NULL) {
+    DEBUG(0, ("SWI call returning error: %s\n", e->errmess));
+  }
+  return e;
+}
+
+
+void service_handler(int number, _kernel_swi_regs *r, void *pw) {
+  IGNORE(pw);
+  IGNORE(r);
+
+  //MemCheck_RegisterMiscBlock(r, sizeof(_kernel_swi_regs));
+
+  switch (number) {
+    case Service_WindowModuleStarting:
+      register_gadgets();
+      break;
+
+  case Service_RedrawingWindow:
+    RedrawingWindow = r->r[0];
+    break;
+
+  case Service_ModeChange:
+    service_mode_change();
+    break;
+
+  }
+
+  //MemCheck_UnRegisterMiscBlock(r);
+}
+
+
+void service_mode_change(void) {
+  VScrollSize = 0;
+  HScrollSize = 0;
+  XEig = -1;
+  YEig = -1;
+}
+
+
+void find_screen_eigs(unsigned int *xeig, unsigned int *yeig) {
+  unsigned int block[4];
+
+  block[0] = 4;
+  block[1] = 5;
+  block[2] = -1;
+  if (_swix(OS_ReadVduVariables, _INR(0,1), block, block) == NULL) {
+    if (xeig != NULL) *xeig = block[0];
+    if (yeig != NULL) *yeig = block[1];
+  }
+}
+
+
+/* works out the size of a window title bar and scroll bars	*/
+void find_tool_sizes(unsigned int *title, unsigned int *vscroll, unsigned int *hscroll) {
+  unsigned int ti, vs, hs, block[26];
+
+  if (title == NULL && vscroll == NULL && hscroll == NULL) return;
+
+  /* Start with default values */
+
+  ti = vs = hs = 44;
+
+  block[0] = 0;
+  if (_swix(Wimp_Extend, _INR(0,1), 11, &block) == NULL) {
+    if (title != NULL)   *title   = block[4] + 2;
+    if (vscroll != NULL) *vscroll = block[3] + 2;
+    if (hscroll != NULL) *hscroll = block[2] + 2;
+  }
+
+}
+
+
+unsigned int faded_background_colour(unsigned int fore, unsigned int back) {
+  unsigned int r, g, b;
+  IGNORE(fore);
+
+  b = ((back >> 24) & 0xff) + 0x20;
+  if (b > 0xff) b = 0xff;
+
+  g = ((back >> 16) & 0xff) + 0x20;
+  if (g > 0xff) g = 0xff;
+
+  r = ((back >> 8) & 0xff) + 0x20;
+  if (r > 0xff) r = 0xff;
+
+  return ((b << 24) | (g << 16) | (r << 8));
+}
+
+
+/* Convert window work area coordinates to absolute screen coordinates	*/
+void work_to_screen(BBox *wa, WimpGetWindowStateBlock *state) {
+    wa->xmin += state->visible_area.xmin - state->xscroll;
+    wa->xmax += state->visible_area.xmin - state->xscroll;
+
+    wa->ymin += state->visible_area.ymax - state->yscroll;
+    wa->ymax += state->visible_area.ymax - state->yscroll;
+}
+
+
+/* Convert absolute screen coordinates to window work are coodinates	*/
+void screen_to_work(BBox *wa, WimpGetWindowStateBlock *state) {
+    wa->xmin -= state->visible_area.xmin - state->xscroll;
+    wa->xmax -= state->visible_area.xmin - state->xscroll;
+
+    wa->ymin -= state->visible_area.ymax - state->yscroll;
+    wa->ymax -= state->visible_area.ymax - state->yscroll;
+}

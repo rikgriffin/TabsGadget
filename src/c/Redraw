@@ -1,0 +1,160 @@
+/* Tabs:Redraw.c		*/
+/* Rik Griffin Nov 2003		*/
+
+//#include "MemCheck:MemCheck.h"
+
+#include <string.h>
+
+#include "kernel.h"
+#include "swis.h"
+
+#include "toolbox.h"
+#include "window.h"
+#include "wimplib.h"
+
+#include "glib.h"
+
+#include "Main.h"
+#include "TabsSettings.h"
+
+
+#define DEBUG_LEVEL	3
+
+static struct WimpPlotIconBlock_IT {
+  BBox bbox;
+  unsigned int flags;
+  struct {
+    char *buffer;
+    char *validation;
+    int buffer_size;
+  } it;
+} PlotIcon_IT = {
+  { 0, 0, 0, 0},
+  ((1<<0) | (1<<2) | (1<<3) | (1<<4) | /*(1<<5) |*/ (1<<7) | (1<<8)),
+  { NULL, "R1", 1 }
+};
+#define PlotIcon ((WimpPlotIconBlock *)&PlotIcon_IT)
+
+
+void _redraw(PrivateTabs *me, WimpRedrawWindowRequestEvent *event) {
+  _kernel_oserror *e;
+  int more, l, col;
+  WimpRedrawWindowBlock	block;
+
+  DEBUG(DEBUG_LEVEL, ("redraw %x %x\n", me->wimp_object, event->window_handle));
+
+  block.window_handle = event->window_handle;
+  wimp_redraw_window(&block, &more);
+
+  /* find the second background colour to use	*/
+  col = me->background_wimp - 3;
+  if (col < 0) col = 0;
+
+  PlotIcon->flags = (PlotIcon->flags & ~(0xffu<<24)) | (me->foreground_wimp << 24) | (me->background_wimp << 28);
+
+  while (more) {
+    DEBUG(DEBUG_LEVEL, ("redraw box %d %d %d %d\n", block.redraw_area.xmin,
+      block.redraw_area.ymin, block.redraw_area.xmax, block.redraw_area.ymax));
+    DEBUG(DEBUG_LEVEL, ("visible_area %d %d %d %d\n", block.visible_area.xmin,
+      block.visible_area.ymin, block.visible_area.xmax, block.visible_area.ymax));
+
+    /* plot the icon that covers the body area.		*/
+    /* (to provide the raised border around the area)	*/
+    PlotIcon->bbox.xmin =  0;
+    PlotIcon->bbox.xmax = (me->box.xmax - me->box.xmin);
+    PlotIcon->bbox.ymax = - TAB_YSIZE + 4;
+    PlotIcon->bbox.ymin = -(me->box.ymax - me->box.ymin);
+    PlotIcon->data.it.buffer = "";
+    PlotIcon->flags &= ~WimpIcon_Filled;	// not filled so texture shows through
+    EL(wimp_plot_icon(PlotIcon), e, fail);
+
+    PlotIcon->flags |= WimpIcon_Filled;
+
+    /* plot a rectangle over the tab background area	*/
+/*
+    EL(wimp_set_colour(me->background_wimp), e, fail);
+    _swix(OS_Plot, _INR(0,2), PLOT_MOVE, block.visible_area.xmin,
+      block.visible_area.ymax);
+    _swix(OS_Plot, _INR(0,2), PLOT_RECTANGLE_FILL + PLOT_DRAW_RELATIVE,
+      block.visible_area.xmax - block.visible_area.xmin,
+      -TAB_YSIZE+4);
+*/
+
+    /* plot non selected tabs		*/
+    for (l = me->base_visible; l <= me->max_visible; l++) if (me->tabs[l].hidden == 0) {
+      int x, y;
+
+      if (me->selected != l) {
+        PlotIcon->bbox.xmin = me->tabs[l].box.xmin - me->tabs[me->base_visible].box.xmin + me->left_xpos;
+        PlotIcon->bbox.xmax = me->tabs[l].box.xmax - me->tabs[me->base_visible].box.xmin + me->left_xpos;
+        PlotIcon->bbox.ymin = me->tabs[l].box.ymin;
+        PlotIcon->bbox.ymax = me->tabs[l].box.ymax;
+        PlotIcon->data.it.buffer = me->tabs[l].label;
+        EL(wimp_plot_icon(PlotIcon), e, fail);
+
+        x = block.visible_area.xmin + PlotIcon->bbox.xmin;
+        y = block.visible_area.ymax + PlotIcon->bbox.ymin;
+        /* plot over the lower edge of the icon with background colour 2	*/
+        wimp_set_colour(col);
+        _swix(OS_Plot, _INR(0,2), PLOT_MOVE, x + 2, y);
+        _swix(OS_Plot, _INR(0,2), PLOT_RECTANGLE_FILL + PLOT_DRAW_RELATIVE,
+          TABWIDTH(me, l) - 4, 2);
+      }
+    }
+
+    DEBUG(3, ("plot selected: %d %d %d %d\n", me->selected, me->tabs[me->selected].hidden, me->base_visible, me->max_visible));
+
+    /* plot selected tab, if there are no tabs, selected will be -1	*/
+    if (me->selected != -1 && me->tabs[me->selected].hidden == 0 && me->selected >= me->base_visible && me->selected <= me->max_visible) {
+      int x, y;
+
+      PlotIcon->bbox.xmin = me->tabs[me->selected].box.xmin - 6 - me->tabs[me->base_visible].box.xmin + me->left_xpos;
+      PlotIcon->bbox.xmax = me->tabs[me->selected].box.xmax + 4 - me->tabs[me->base_visible].box.xmin + me->left_xpos;
+      PlotIcon->bbox.ymin = me->tabs[me->selected].box.ymin;
+      PlotIcon->bbox.ymax = me->tabs[me->selected].box.ymax + 4;
+      PlotIcon->data.it.buffer = me->tabs[me->selected].label;
+      EL(wimp_plot_icon(PlotIcon), e, fail);
+
+      x = block.visible_area.xmin + PlotIcon->bbox.xmin;
+      y = block.visible_area.ymax + PlotIcon->bbox.ymin;
+
+      /* plot over the lower edge of the icon with background colour 1	*/
+      wimp_set_colour(me->background_wimp);
+      _swix(OS_Plot, _INR(0,2), PLOT_MOVE, x + 4, y);
+      _swix(OS_Plot, _INR(0,2), PLOT_RECTANGLE_FILL + PLOT_DRAW_RELATIVE,
+        TABWIDTH(me, me->selected), 4);
+
+      /* plot points to tidy up the corners bottom left and right	*/
+      wimp_set_colour(col);
+      _swix(OS_Plot, _INR(0,2), 69, x + 2, y);
+      _swix(OS_Plot, _INR(0,2), 69, x + TABWIDTH(me, me->selected) + 8, y);
+    }
+
+    wimp_get_rectangle(&block, &more);
+  }
+
+  return;
+
+fail:
+  DEBUG(0, ("error in redraw: %s\n", e->errmess));
+  return;
+}
+
+
+_kernel_oserror *_force_redraw(PrivateTabs *me) {
+  WimpGetWindowStateBlock state;
+  _kernel_oserror *e;
+  BBox box;
+
+  DEBUG(3, ("_force_redraw: %x\n", me));
+
+  state.window_handle = me->wimp_object;
+  ER(wimp_get_window_state(&state), e);
+
+  box.xmin = 0 + state.xscroll;
+  box.ymax = 0 + state.yscroll;
+  box.xmax = me->box.xmax - me->box.xmin + state.xscroll;
+  box.ymin = me->box.ymax + me->box.ymin + state.yscroll;
+
+  return window_force_redraw(0, me->object_id, &box);
+}

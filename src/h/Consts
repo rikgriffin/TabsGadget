@@ -1,0 +1,30 @@
+/* Tabs:Consts.h		*/
+/* Rik Griffin Nov 2003		*/
+
+/* define or not to turn debugging on or off	*/
+#ifndef Debug_On
+ #define Debug_On		0
+#endif
+
+/* level of debugging info sent to Tabs:Debug	*/
+/* from 0 (none) to 3 (verbose)			*/
+#define Debug_Level 		0
+
+#ifdef MemCheck_MEMCHECK
+#undef _mem_allocate
+#undef _mem_free
+#undef _mem_extend
+
+#define _mem_allocate(x) mem_allocate_wrapper(x,__FILE__,__LINE__)
+#define _mem_free(x) mem_free_wrapper(x,__FILE__,__LINE__)
+#define _mem_extend(x,y) mem_extend_wrapper(x,y,__FILE__,__LINE__)
+
+extern void *mem_allocate_wrapper(int x, char *file, int line);
+extern void mem_free_wrapper(void *x, char *file, int line);
+extern void *mem_extend_wrapper(void *x, int y, char *file, int line);
+
+#else
+#define _mem_allocate(x) mem_allocate(x)
+#define _mem_free(x) mem_free(x)
+#define _mem_extend(x,y) mem_extend(x,y)
+#endif

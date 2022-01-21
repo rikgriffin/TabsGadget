@@ -1,0 +1,600 @@
+/* Tabs:Tabs.c			*/
+/* Rik Griffin Nov 2003		*/
+
+//#include "MemCheck:MemCheck.h"
+
+#include <string.h>
+
+#include "kernel.h"
+#include "swis.h"
+
+#include "toolbox.h"
+#include "window.h"
+#include "wimplib.h"
+
+#include "glib.h"
+
+#include "Main.h"
+#include "Misc.h"
+#include "TabsSettings.h"
+
+
+static Gadget ArrowTemplate;
+
+
+_kernel_oserror *tabs_init(void) {
+  _kernel_oserror *e;
+  SpriteCtrlBlock *spr;
+
+  //MemCheck_RegisterMiscBlock(&ArrowTemplate, sizeof(Gadget));
+
+  ArrowTemplate.hdr.flags = 0;
+  ArrowTemplate.hdr.type = Button_Type;
+//  ArrowTemplate.hdr.box
+  ArrowTemplate.hdr.component_id = 0;
+  ArrowTemplate.hdr.help_message = "Click to scroll tabs";
+  ArrowTemplate.hdr.max_help = 32;
+
+  ArrowTemplate.data.button.button_flags = (1<<0) | (1<<1) | (1<<3) | (1<<4) | (1<<5) | (3<<12);
+  ArrowTemplate.data.button.value = "";
+  ArrowTemplate.data.button.max_value = 1;
+  ArrowTemplate.data.button.validation = "";
+  ArrowTemplate.data.button.max_validation = 32;
+
+  /* find the size of the scroll arrows (in OS coords)	*/
+  ER(_swix(OS_SpriteOp, _INR(0,2) | _OUT(2), 0x118, Sprites, "tab_left", &spr), e);
+
+  Arrow_XSize = 2 * sprite_pixel_width(spr);
+  Arrow_YSize = 2 * (spr->height + 1);
+
+  if (Arrow_XSize < ARROW_MINXSIZE) Arrow_XSize = ARROW_MINXSIZE;
+  if (Arrow_YSize < ARROW_MINYSIZE) Arrow_YSize = ARROW_MINYSIZE;
+
+  DEBUG(0, ("Arrow size: %d x %d\n", Arrow_XSize, Arrow_YSize));
+
+  return NULL;
+}
+
+
+/* Changed from using wimp icons to gadgets for the scroll arrows.	*/
+/* The icons were interfering with interactive help somehow.		*/
+_kernel_oserror *tabs_check_xsize(PrivateTabs *me) {
+  _kernel_oserror *e;
+  int i, xs;
+  unsigned int arrows;
+
+  /* find highest visible tab	*/
+  xs = (me->box.xmax - me->box.xmin) - (me->left_xpos + TAB_RIGHTBORDER);
+  me->max_visible = me->base_visible;
+
+  arrows = 0;
+  if (me->base_visible > 0) arrows |= HAS_LEFT_ARROW;
+
+  for (i = me->base_visible; i < me->count; i++) {
+    me->max_visible = i;
+    if (me->tabs[i].box.xmax - me->tabs[me->base_visible].box.xmin >= xs) break;
+  }
+  if (me->max_visible < me->count - 1) arrows |= HAS_RIGHT_ARROW;
+  if (me->tabs[me->max_visible].box.xmax - me->tabs[me->base_visible].box.xmin > xs) {
+    arrows |= HAS_RIGHT_ARROW;
+  }
+
+  DEBUG(1, ("tabs_check_xsize: xsize = %d  base_vis = %d  max_vis = %d  count = %d\n", xs, me->base_visible, me->max_visible, me->count));
+  DEBUG(1, ("flags %d  arrows %d  existing arrows %d\n", me->flags, arrows, me->has_arrows));
+
+  if ((me->flags & Tabs_AllowScrollArrows) == 0) arrows = 0;
+
+  if ((arrows & HAS_LEFT_ARROW) != 0 && (me->has_arrows & HAS_LEFT_ARROW) == 0) {
+    int icons[4];
+
+    ArrowTemplate.hdr.component_id = 0x0;
+    ArrowTemplate.data.button.button_flags &= ~((7<<24) | (7<<28));
+    ArrowTemplate.data.button.button_flags |= (me->foreground_wimp<<24) | (me->background_wimp<<28);
+    ArrowTemplate.data.button.validation = "R5;Stab_left,tab_pleft";
+    ER(window_add_gadget(0, me->object_id, &ArrowTemplate, NULL), e);
+    ER(gadget_get_icon_list(0, me->object_id, 0x0, icons, 16, NULL), e);
+    me->left_arrow_wimp = icons[0];
+
+    me->has_arrows |= HAS_LEFT_ARROW;
+    DEBUG(1, ("Added left arrow, wimp icon %d\n", me->left_arrow_wimp));
+
+  } else if ((arrows & HAS_LEFT_ARROW) == 0) {
+    window_remove_gadget(0, me->object_id, 0);
+    me->has_arrows &= ~HAS_LEFT_ARROW;
+    me->left_arrow_wimp = -1;
+
+    DEBUG(1, ("Removed left arrow\n"));
+  }
+
+  me->left_xpos = TAB_LEFTBORDER + (me->has_arrows & HAS_LEFT_ARROW ? Arrow_XSize : 0);
+
+  if ((arrows & HAS_RIGHT_ARROW) != 0 && (me->has_arrows & HAS_RIGHT_ARROW) == 0) {
+    int icons[4];
+
+    ArrowTemplate.hdr.component_id = 0x1;
+    ArrowTemplate.data.button.button_flags &= ~((7<<24) | (7<<28));
+    ArrowTemplate.data.button.button_flags |= (me->foreground_wimp<<24) | (me->background_wimp<<28);
+    ArrowTemplate.data.button.validation = "R5;Stab_right,tab_pright";
+    ER(window_add_gadget(0, me->object_id, &ArrowTemplate, NULL), e);
+    ER(gadget_get_icon_list(0, me->object_id, 0x1, icons, 16, NULL), e);
+    me->right_arrow_wimp = icons[0];
+
+    me->has_arrows |= HAS_RIGHT_ARROW;
+    DEBUG(1, ("Added right arrow, wimp icon %d\n", me->right_arrow_wimp));
+
+  } else if ((arrows & HAS_RIGHT_ARROW) == 0) {
+    window_remove_gadget(0, me->object_id, 1);
+    me->has_arrows &= ~HAS_RIGHT_ARROW;
+    me->right_arrow_wimp = -1;
+
+    DEBUG(1, ("Removed right arrow\n"));
+  }
+
+  if (me->has_arrows & HAS_LEFT_ARROW) {
+    BBox box;
+    box.ymin = ARROW_YPOS - Arrow_YSize;
+    box.ymax = ARROW_YPOS;
+
+    box.xmin = 0;
+    box.xmax = Arrow_XSize;
+
+    DEBUG(3, ("left arrow box: %d %d %d %d\n", box.xmin, box.ymin, box.xmax, box.ymax));
+    ER(gadget_move_gadget(0, me->object_id, 0, &box), e);
+  }
+
+  if (me->has_arrows & HAS_RIGHT_ARROW) {
+    BBox box;
+    int xs;
+
+    xs = me->box.xmax - me->box.xmin;
+
+    box.ymin = ARROW_YPOS - Arrow_YSize;
+    box.ymax = ARROW_YPOS;
+
+    box.xmin = xs - Arrow_XSize;
+    box.xmax = xs;
+
+    DEBUG(3, ("right arrow box: %d %d %d %d\n", box.xmin, box.ymin, box.xmax, box.ymax));
+    ER(gadget_move_gadget(0, me->object_id, 1, &box), e);
+  }
+  return NULL;
+}
+
+
+static void send_selection_event(PrivateTabs *me, int old) {
+  TabsSelectionEvent event;
+
+  event.hdr.size = sizeof(TabsSelectionEvent);
+  event.hdr.event_code = TabsEvent_Selection;
+  event.hdr.flags = 0;
+  event.hdr.reference_number = 0;
+
+  event.flags = 0;
+  event.selected = me->selected;
+  event.previous = old;
+
+  toolbox_raise_toolbox_event(0, me->parent_id, me->component_id, (ToolboxEvent*)&event);
+}
+
+
+static _kernel_oserror *tabs_hide_nested(PrivateTabs *me) {
+  _kernel_oserror *e;
+  WimpGetWindowStateBlock state;
+
+  if (me->tabs[me->selected].nested == 0) return NULL;
+
+  state.window_handle = me->tabs[me->selected].nested_wimp;
+  ER(wimp_get_window_state(&state), e);
+  me->tabs[me->selected].xscroll = state.xscroll;
+  me->tabs[me->selected].yscroll = state.yscroll;
+
+  DEBUG(3, ("saved scroll offsets for pane %d: %d %d\n", me->selected, state.xscroll,
+    state.yscroll));
+
+  ER(toolbox_hide_object(0, me->tabs[me->selected].nested), e);
+
+  DEBUG(3, ("Hidden pane %d\n", me->selected));
+
+  return NULL;
+}
+
+
+static _kernel_oserror *tabs_show_nested(PrivateTabs *me) {
+  _kernel_oserror *e;
+  WindowShowObjectBlock show;
+  WimpGetWindowStateBlock state;
+  int vscroll, hscroll;
+
+  if (me->selected == -1) return NULL;
+  if (me->tabs[me->selected].nested == 0) return NULL;
+
+  DEBUG(3, ("Showing pane %d\n", me->selected));
+
+  /* find if the pane has scrollbars so as to adjust the displayed area	*/
+  state.window_handle = me->tabs[me->selected].nested_wimp;
+  ER(wimp_get_window_state(&state), e);
+  if (state.flags & WimpWindow_VScroll) vscroll = 1; else vscroll = 0;
+  if (state.flags & WimpWindow_HScroll) hscroll = 1; else hscroll = 0;
+
+  /* remove title bar, because for some reason it gets shown	*/
+  /* even if the colour is set to transparent.			*/
+  show.window_flags = state.flags & ~(1<<26);
+  show.alignment_flags = 1;
+
+  DEBUG(0, ("flags: %x %x\n", state.flags, show.window_flags));
+
+  state.window_handle = me->wimp_object;
+  ER(wimp_get_window_state(&state), e);
+
+  DEBUG(3, ("window area: %d %d %d %d\n", state.visible_area.xmin, state.visible_area.ymin, state.visible_area.xmax, state.visible_area.ymax));
+
+  /* Setup display sizes */
+  show.visible_area.xmin = state.visible_area.xmin - state.xscroll + NEST_LEFTBORDER;
+  show.visible_area.xmax = state.visible_area.xmax - state.xscroll - (vscroll ? VScrollSize : 0) - NEST_RIGHTBORDER;
+
+  show.visible_area.ymin = state.visible_area.ymin - state.yscroll + (hscroll ? HScrollSize : 0) + NEST_BOTTOMBORDER;
+  show.visible_area.ymax = state.visible_area.ymax - state.yscroll - NEST_TOPBORDER;
+
+  show.xscroll = me->tabs[me->selected].xscroll;
+  show.yscroll = me->tabs[me->selected].yscroll;
+  show.behind = -1;
+  show.parent_window_handle = me->wimp_object;
+
+  DEBUG(3, ("Restored saved scroll offsets: %d %d\n", show.xscroll, show.yscroll));
+  DEBUG(3, ("nest box: %d %d %d %d\n", show.visible_area.xmin, show.visible_area.ymin, show.visible_area.xmax, show.visible_area.ymax));
+
+
+/*
+  {
+    BBox box;
+    box.xmin = 0;
+    box.xmax = show.visible_area.xmax - show.visible_area.xmin;
+    box.ymax = 0;
+    box.ymin = -(show.visible_area.ymax - show.visible_area.ymin);
+    ER(window_set_extent(0, me->tabs[me->selected].nested, &box), e);
+    DEBUG(0, ("extent %d %d %d %d\n", box.xmin, box.ymin, box.xmax, box.ymax));
+  }
+*/
+
+  ER(toolbox_show_object(Toolbox_ShowObject_AsSubWindow, me->tabs[me->selected].nested,
+    Toolbox_ShowObject_FullSpec, &show, me->object_id, me->component_id), e);
+
+  return NULL;
+}
+
+
+#define TABS_CHUNK	4
+
+static _kernel_oserror *tabs_grow_list(PrivateTabs *me) {
+  TabData *n;
+  int i, size;
+
+  DEBUG(1, ("growing tabs tab list: %d %d ", me->list_size, me->count));
+
+  size = me->list_size;
+  while (size <= me->count) size += TABS_CHUNK;
+
+  if (me->tabs == NULL) {
+    if ((n = _mem_allocate(size * sizeof(TabData))) == NULL) goto nomem;
+
+  } else {
+    if ((n = _mem_allocate(size * sizeof(TabData))) == NULL) goto nomem;
+
+    memcpy(n, me->tabs, me->list_size * sizeof(TabData));
+    _mem_free(me->tabs);
+  }
+
+  for (i = me->list_size; i < me->list_size + TABS_CHUNK; i++) {
+    n[i].label = NULL;
+    n[i].nested = 0;
+    n[i].nested_wimp = 0;
+    n[i].xscroll = n[i].yscroll = 0;
+  }
+
+  me->list_size = size;
+  me->tabs = n;
+
+  DEBUG(1, ("new size %d\n", me->list_size));
+
+  return NULL;
+
+nomem:
+  DEBUG(1, ("failed\n"));
+  return (_kernel_oserror *)"   @malloc failed";
+}
+
+
+/* templ->text is a string made up of comma separated items, which are	*/
+/* the names of the window objects to be nested.			*/
+_kernel_oserror *tabs_create(PrivateTabs *me, Tabs *templ) {
+  _kernel_oserror *e;
+  int context;
+
+  if (me->tabs != NULL) _mem_free(me->tabs);
+
+  me->tabs = NULL;
+  me->list_size = 0;
+  me->count = 0;
+
+  //MemCheck_RegisterMiscBlock_String(templ->text);
+
+  context = 0;
+  while (templ->text != NULL && context != -1) {
+    char buffer[256];
+    int i;
+
+    context = next_string(templ->text, buffer, context);
+    if (buffer[0] == '\0') break;
+
+    /* buffer contains the text for the next tab	*/
+    if (me->count >= me->list_size) EL(tabs_grow_list(me), e, fail);
+    DEBUG(0, ("tabs_create: new tab %d: %s\n", me->count, buffer));
+
+    i = me->count;
+    me->tabs[i].label = NULL;
+    me->tabs[i].nested = 0;
+    me->tabs[i].hidden = 0;
+    me->count++;
+
+    DEBUG(0, ("tabs_create: object: %s\n", buffer[0] == '\0' ? "none" : buffer));
+
+    /* buffer now contains the window object name to nest in this tab	*/
+    /* which may be null						*/
+    if (buffer[0] != '\0') {
+      ObjectClass cls;
+      int size;
+
+      EL(toolbox_create_object(0, buffer, &me->tabs[i].nested), e, fail);
+      EL(toolbox_get_object_class(0, me->tabs[i].nested, &cls), e, fail);
+
+      if (cls != Window_ObjectClass) goto bad_class;
+
+      EL(window_get_wimp_handle(0, me->tabs[i].nested, &me->tabs[i].nested_wimp),
+        e, fail);
+
+      /* take the tab text from the window title	*/
+      EL(window_get_title(0, me->tabs[i].nested, buffer, 256, &size), e, fail);
+      me->tabs[i].label = strdup(buffer);
+
+      DEBUG(0, ("tabs_create: attached object: %s %x %x\n", buffer,
+        me->tabs[i].nested, me->tabs[i].nested_wimp));
+    } // end if (buffer[0] == 0)
+
+    DEBUG(0, ("\n"));
+  } // end while (context)
+
+  //MemCheck_UnRegisterMiscBlock(templ->text);
+
+  me->base_visible = 0;
+  me->max_visible = me->count - 1;
+  me->selected = me->count == 0 ? -1 : 0;
+  me->has_arrows = 0;
+
+  DEBUG(0, ("base: %d max: %d selected: %d\n", me->base_visible, me->max_visible, me->selected));
+
+  return NULL;
+
+fail:
+  tabs_delete(me);
+  return e;
+
+bad_class:
+  tabs_delete(me);
+  return (_kernel_oserror *)"   @Only window objects may be nested in tabs";
+}
+
+
+
+void tabs_delete(PrivateTabs *me) {
+  int i;
+
+  for (i = 0; i < me->count; i++) {
+    if (me->tabs[i].label != NULL) _mem_free(me->tabs[i].label);
+    if (me->tabs[i].nested != 0) toolbox_delete_object(0, me->tabs[i].nested);
+    DEBUG(0, ("tabs_delete: deleted nested object %x\n", me->tabs[i].nested));
+  }
+
+  if (me->tabs != NULL) {
+    _mem_free(me->tabs);
+    DEBUG(0, ("tabs_delete: deleted tabs array\n"));
+  }
+
+}
+
+
+/* sets the bounding box sizes based on current desktop font	*/
+_kernel_oserror *tabs_set_bboxes(PrivateTabs *me) {
+  int l, xsize, xpos, ymax, ymin;
+
+  ymax = - TAB_TOPBORDER;
+  ymin = ymax - TAB_YSIZE + TAB_TOPBORDER;
+  xpos = 0;
+
+  DEBUG(3, ("tabs_set_bboxes for %x: %d tabs", me, me->count));
+
+  for (l = 0; l < me->count; l++) {
+
+    if (me->tabs[l].hidden) {
+      me->tabs[l].box.ymax = -1;
+      me->tabs[l].box.ymin = -1;
+      me->tabs[l].box.xmax = -1;
+      me->tabs[l].box.xmin = -1;
+
+    } else {
+
+      if (me->tabs[l].label != NULL) {
+        _swix(Wimp_TextOp, _INR(0,2) | _OUT(0), 1, me->tabs[l].label, 0, &xsize);
+      } else {
+        xsize = 24;
+      }
+
+      DEBUG(3, (" %s %d", me->tabs[l].label, xsize));
+
+      me->tabs[l].box.ymax = ymax;
+      me->tabs[l].box.ymin = ymin;
+      me->tabs[l].box.xmin = xpos;
+      xpos += xsize + TAB_EXTRAXSIZE;
+      me->tabs[l].box.xmax = xpos;
+    }
+  }
+
+  DEBUG(3, ("\n"));
+
+  return NULL;
+}
+
+
+/* changes which tab is selected, shows the right nested window	*/
+/* and sends the appropriate event.				*/
+_kernel_oserror *tabs_change_selected(PrivateTabs *me, int new_tab) {
+  _kernel_oserror *e;
+  int old;
+
+  ER(tabs_hide_nested(me), e);
+  old = me->selected;
+  me->selected = new_tab;
+  ER(_force_redraw(me), e);
+  ER(tabs_show_nested(me), e);
+  send_selection_event(me, old);
+
+  return NULL;
+}
+
+
+static void inc_base_visible(PrivateTabs *me) {
+  int base;
+
+  if (me->max_visible >= me->count-1 &&
+      me->tabs[me->max_visible].box.xmax - me->tabs[me->base_visible].box.xmin
+      <= me->box.xmax - me->box.xmin - (Arrow_XSize + 4) - 4) return;
+
+  base = me->base_visible;
+
+  /* skip any hidden tabs	*/
+  while (++base < me->count) {
+    if (me->tabs[base].hidden == 0) {
+      me->base_visible = base;
+      return;	// success
+    }
+  } // end while
+
+}
+
+static void dec_base_visible(PrivateTabs *me) {
+  int base;
+
+  base = me->base_visible;
+
+  while (--base >= 0) {
+
+    if (me->tabs[base].hidden == 0) {
+      me->base_visible = base;
+      return;	// success
+    }
+  }
+
+}
+
+
+_kernel_oserror *tabs_click(PrivateTabs *me, WimpMouseClickEvent *event, IdBlock *id) {
+  _kernel_oserror *e;
+
+  DEBUG(0, ("tabs_click: %x %x %x  window: %x  icon: %x\n", me, id->self_id, id->self_component, event->window_handle, event->icon_handle));
+
+  /* We can't rely on the component id to be correct due to differences		*/
+  /* in the Toolbox module. The ROL version returns correct ids, the		*/
+  /* Iyonix version does not. So lets check the wimp icon handles instead.	*/
+
+  if (event->icon_handle == -1);
+  else if (event->icon_handle == me->left_arrow_wimp) id->self_component = 0;
+  else if (event->icon_handle == me->right_arrow_wimp) id->self_component = 1;
+
+  if (id->self_component == 0 || id->self_component == 1) {
+    /* click on scroll buttons	*/
+    int old = me->base_visible;
+    int dir;
+
+    dir = id->self_component == 0 ? -1 : 1;
+    if (event->buttons == Wimp_MouseButtonAdjust) dir = -dir;
+
+    DEBUG(0, ("scroll arrow, direction %d\n", dir));
+
+    if (dir == 1) inc_base_visible(me);
+    else dec_base_visible(me);
+
+    if (me->base_visible != old) {
+      ER(tabs_check_xsize(me), e);
+      ER(_force_redraw(me), e);
+    }
+    return NULL;
+  } else {
+
+    /* click on background (ie our virtual icons	*/
+    WimpGetWindowStateBlock state;
+    int x, y, i;
+
+    state.window_handle = me->wimp_object;
+    ER(wimp_get_window_state(&state), e);
+
+    x = event->mouse_x - state.visible_area.xmin + state.xscroll - me->left_xpos;
+    y = event->mouse_y - state.visible_area.ymax + state.yscroll;
+    if (y < - TAB_YSIZE - 8) return NULL;	// ignore click outside the tab
+
+    /* see which tab it's in		*/
+    for (i = me->base_visible; i <= me->max_visible; i++) {
+      if (x > me->tabs[i].box.xmin - me->tabs[me->base_visible].box.xmin
+      && x < me->tabs[i].box.xmax - me->tabs[me->base_visible].box.xmin
+      && me->selected != i) {
+
+        DEBUG(0, ("Click on tab %d\n", i));
+        ER(tabs_change_selected(me, i), e);
+
+        return NULL;
+      }
+    }
+  }
+  /* if we get here, the click wasn't in an icon	*/
+
+  return NULL;
+}
+
+
+_kernel_oserror *tabs_update_display(PrivateTabs *me) {
+  _kernel_oserror *e;
+
+  DEBUG(3, ("tabs_update_display\n"));
+
+  ER(tabs_set_bboxes(me), e);
+  ER(_force_redraw(me), e);
+  ER(tabs_show_nested(me), e);
+
+  return NULL;
+}
+
+
+_kernel_oserror *tabs_set_text(PrivateTabs *me, int index, char *text) {
+  _kernel_oserror *e;
+
+  if (me->tabs[index].label != NULL) _mem_free(me->tabs[index].label);
+
+  me->tabs[index].label = strdup(text);
+
+  DEBUG(0, ("new label at %x -> %s\n", me->tabs[index].label, me->tabs[index].label));
+
+  ER(tabs_set_bboxes(me), e);
+  ER(_force_redraw(me), e);
+
+  return NULL;
+}
+
+
+_kernel_oserror *tabs_hidetab(PrivateTabs *me, int index, int hidden) {
+  _kernel_oserror *e;
+
+  me->tabs[index].hidden = (hidden != 0);
+
+  ER(tabs_set_bboxes(me), e);
+  ER(_force_redraw(me), e);
+
+  return NULL;
+}
