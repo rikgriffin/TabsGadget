@@ -3,6 +3,8 @@ Toolbox Tabs gadget for RISC OS
 
 Welcome to the open source release of the Tabs Toolbox gadget.
 
+I've uploaded the source to github using a RISC OS style directory structure (eg ".c" files are in a directory called "c"), and LanManFS style file names (eg an Obey file will be called "file,feb"). My assumption is that anyone downloading from github will be doing so on Windows/Linux and then transferring the files to RISC OS using SMB of some sort.
+
 Build instructions:
 
 Tabs was written using the Acorn (later ROOL) development environment, and the Norcroft compiler. It needs the standard C library, the Toolbox library and "glib" - both the header files for compilation and the libraries to link against.
