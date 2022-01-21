@@ -37,8 +37,8 @@ Clean:  Run:rm
 	rm $(Library)
 	rm $(LibraryFiles)
 	rm h.Header
-	rm c.Sprites
-	trim -file MakeFile -line "<35> Dynamic dependencies:"
+	#rm c.Sprites
+	#trim -file MakeFile -line "<35> Dynamic dependencies:"
 
 # Static dependencies:
 h.Header:	o.Header
