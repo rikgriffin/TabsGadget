@@ -15,7 +15,7 @@ I've never tried building this under any other environment, or with any other co
 
 To build, just run the "Make" obey file. This just runs "amu all" in a TaskWindow. There's a pretty standard Makefile that you can probably use with some other make utility if you wish.
 
-Note that to run "make clean", you need an "rm" command on your Run$Path which behaves similarly to the unix/linux "rm". You also need a "trim" command which is used to snip off the "Dynamic dependencies" part of the Makefile. I'll upload BASIC version of these commands to github, but someone will probably come up with a better system.
+Note that to run "make clean", you need an "rm" command on your Run$Path which behaves similarly to the unix/linux "rm". You also need a "trim" command which is used to snip off the "Dynamic dependencies" part of the Makefile. Simple BASIC versions of these commands are vailable in the "Utilities" repo. Just copy them into your Library directory, or elsewhere on Run$Path.
 
 Also note that you may need to create a directory called "o" for the compiler to put object files in to.
 
