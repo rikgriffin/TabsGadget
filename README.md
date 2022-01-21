@@ -3,7 +3,7 @@ Toolbox Tabs gadget for RISC OS
 
 Welcome to the open source release of the Tabs Toolbox gadget.
 
-I've uploaded the source to github using a RISC OS style directory structure (eg ".c" files are in a directory called "c"), and LanManFS style file names (eg an Obey file will be called "file,feb"). My assumption is that anyone downloading from github will be doing so on Windows/Linux and then transferring the files to RISC OS using SMB of some sort.
+I've uploaded the source to github using a RISC OS style directory structure (eg ".c" files are in a directory called "c"), and LanManFS style file names (eg an Obey file will be called "file,feb"). My assumption is that anyone downloading from github will be doing so on Windows/Linux and then transferring the files to RISC OS using SMB of some sort. If you download a ZIP of the entire source tree, then extract it on the Windows/Linux side before copying files to RISC OS, then LanManFS will get the correct file types.
 
 Build instructions:
 
@@ -16,6 +16,8 @@ I've never tried building this under any other environment, or with any other co
 To build, just run the "Make" obey file. This just runs "amu all" in a TaskWindow. There's a pretty standard Makefile that you can probably use with some other make utility if you wish.
 
 Note that to run "make clean", you need an "rm" command on your Run$Path which behaves similarly to the unix/linux "rm". You also need a "trim" command which is used to snip off the "Dynamic dependencies" part of the Makefile. I'll upload BASIC version of these commands to github, but someone will probably come up with a better system.
+
+Also note that you may need to create a directory called "o" for the compiler to put object files in to - this directory exists in the repo but seems to get lost if you download a ZIP archive.
 
 Rik Griffin Jan 2022
 
