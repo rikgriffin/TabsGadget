@@ -1,0 +1,234 @@
+Tabs gadget version 0.12 (30 Nov 2011)
+© Rik Griffin 2003-15
+
+Note - ResEd 0.52 has built in support for Tabs gadgets. To create a Tabs
+gadget in ResEd, just drag from the "Gadgets" window in the same way as you
+would for any other gadget type. ResEd is available from
+
+  https://www.riscosopen.org/content/downloads/desktop-zipfiles
+
+
+
+Technical information
+
+A Tabs gadget has 3 properties, although as noted above, ResEd 0.52 has
+support built in and you shouldn't need to edit these properties directly,
+unless you are creating a gadget in code for example.
+
+The first property is an integer at offset 0, and is the foreground colour
+of the gadget, as a Wimp colour. The default is 7 (black).
+
+The second property is an integer at offset 4 and is the background
+colour. The default is 1 (standard Wimp background grey).
+
+The third property is a string, whose reference is at offset 8. The
+string is a comma separated list. The list items are simply the names of
+the window objects to be shown by each tab. The text in the tab itself is
+the title string of the window object shown. The window objects are always
+shown without a title bar, however you will probably also want to set the
+title bar foregound colour to transparent, to get rid of the window
+border (unless you need the window to have other furniture, in which
+case you have to have the window border).
+
+The gadget's flags word is used, apart fom the 2 standard flags in bits 30
+and 31, the flag in bit 0 controls whether scroll arrows are shown if the
+tabs are too wide for the gadget's extent.
+
+To see the gadget work, make sure the module is loaded and the load the
+supplied resource file into !ResTest. However note that for some reason
+ResTest sometimes crashes when the Tabs object delivers an event - I think
+this is a fault in ResTest but I'm not sure yet.
+
+Feedback is welcomed, please send to rik.grf@gmail.com
+
+
+Version history
+~~~~~~~~~~~~~~~
+
+Version 0.12: Updated C veneers to support Tabs_HideTab.
+
+Version 0.11: Fixed data aborts when creating / deleting a gadget with no
+nested windows.
+
+Version 0.10: Recompiled to hopefully be Beagleboard compatible. Fixed
+redraw problems when gadget shown in ResEd.
+
+Version 0.09: the Tabs' background now shows a window texture, if one is
+selected.
+
+Version 0.06: Updated so it should work with both the RISC OS Ltd version
+and the Iyonix (RISC OS 5) version of the Toolbox.
+
+
+Methods
+~~~~~~~
+
+Note - for C programmers there is a supplied library "TabsLib" which
+provides veneers for these methods. See Tabs.h for details. The file
+Veneers.c is also supplied in case you need to recompile them. As
+supplied they are compiled as 32 bit code.
+
+
+Tabs_SetState 0x402c 16428
+entry:
+r0 = flags
+r1 = window
+r2 = 0x402c
+r3 = component id
+r4 = new gadget flags
+
+exit:
+none
+
+Use this instead of Gadget_SetFlags.
+
+
+
+Tabs_GetState 0x402d 16429
+entry:
+r0 = flags
+r1 = window
+r2 = 0x402d
+r3 = component id
+
+exit:
+r0 = gadget flags
+
+Use this instead of Gadget_GetFlags.
+
+
+
+Tabs_SetSelected 0x402e 16430
+entry:
+r0 = flags
+r1 = window
+r2 = 0x402e
+r3 = component id
+r4 = index of tab to select (starts at 0)
+
+exit:
+r0 = previously selected tab index
+
+Equivalent to clicking on the specified tab. Returns an error if the
+supplied tab index is invalid.
+
+
+
+Tabs_GetSelected 0x402f 16431
+entry:
+r0 = flags
+r1 = window
+r2 = 0x402f
+r3 = component id
+
+exit:
+r0 = currently selected tab index
+
+
+Tabs_TabFromWindow 0x4030 16432
+entry:
+r0 = flags
+r1 = window
+r2 = 0x4030
+r3 = component id
+r4 = window object id
+
+exit:
+r0 = tab index
+
+Returns the index of the tab which has a particular window associated
+with it. Note that if you use shared window objects, only the first tab
+to use a particular window will be returned. Returns -1 if the supplied
+window object id doesn't match any attached to tabs.
+
+
+Tabs_WindowFromTab 0x4031 16433
+r0 = flags
+r1 = window
+r2 = 0x4031
+r3 = component id
+r4 = tab index
+
+exit:
+r0 = window object id
+
+Returns the window object that a particular tab is associated with.
+Returns an error if the supplied tab index is invalid.
+
+
+Tabs_SetLabel 0x4032 16434
+r0 = flags
+r1 = window
+r2 = 0x4032
+r3 = component id
+r4 = tab index
+r5 = pointer to new label text
+
+exit:
+none
+
+Sets the text for a particular tab. By default the text is the title of
+the window nested in the tab, but it can be changed with this method.
+Returns an error if the supplied tab index is invalid.
+
+
+Tabs_GetLabel 0x4033 16435
+r0 = flags
+r1 = window
+r2 = 0x4033
+r3 = component id
+r4 = tab index
+r5 = ptr to buffer or 0 to find size
+r6 = size of buffer (if r5 != 0)
+
+exit:
+if r5 = 0 on entry:
+  r6 = size of buffer required
+
+if r5 != 0 on entry:
+  r6 = number of bytes written to buffer
+
+
+Tabs_HideTab 0x4034 16436
+r0 = flags
+r1 = window
+r2 = 0x4034
+r3 = component id
+r4 = tab index
+r5 = 1 to hide, 0 to show
+
+exit:
+all preserved
+
+Hides or shows a particular tab, depending on the flag in r5.
+
+
+Licence
+~~~~~~~
+
+Tabs is distributed under a BSD style licence, as shown below:
+
+Copyright 2003-2022 Rik Griffin <rik.grf@gmail.com>
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+   1. Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+   2. Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimer in the documentation
+      and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY R GRIFFIN "AS IS" AND ANY EXPRESS
+OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL R GRIFFIN OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+DAMAGE.
