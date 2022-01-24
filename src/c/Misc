@@ -1,21 +1,16 @@
 /* Tabs:Misc.c			*/
 /* Rik Griffin Nov 2003		*/
 
-//#include "MemCheck:MemCheck.h"
-
 #include <string.h>
-
-#include "kernel.h"
-#include "swis.h"
-
-#include "toolbox.h"
-#include "window.h"
-#include "wimplib.h"
-
-#include "glib.h"
 
 #include "Main.h"
 #include "Misc.h"
+
+/*
+ * This is in glib.h but there are some nasty header file
+ * clashes that make it a pain to #include properly.
+*/
+extern void *mem_allocate(int amount);
 
 
 
