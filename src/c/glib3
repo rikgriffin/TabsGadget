@@ -13,16 +13,24 @@
  * limitations under the License.
  */
 
+
+/*
+ * I've modified this file a bit so that it will compile stand-along
+ * as part of the Tabs module - Rik G
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "kernel.h"
 #include "swis.h"
 
-#include "macros.h"
-#include "twimp.h"
-#include "objects/toolbox.h"
-#include "objects/window.h"
+//#include "macros.h"
+//#include "twimp.h"
+//#include "objects/toolbox.h"
+//#include "objects/window.h"
 
+#include "wimplib.h"
+#include "toolbox.h"
 #include "glib.h"
 
 typedef struct _tasks {
@@ -33,6 +41,7 @@ typedef struct _tasks {
 } TaskRec;
 
 static TaskRec *all_tasks[8]=NULL;
+
 
 static TaskRec *find_current_task(int *th,int type)
 {
@@ -49,6 +58,7 @@ static TaskRec *find_current_task(int *th,int type)
    }
    return list;
 }
+
 
 static int FILTERS[] = {Toolbox_RegisterPostFilter_ToolboxEvent,
     	      Toolbox_RegisterPostFilter_WimpEvent,

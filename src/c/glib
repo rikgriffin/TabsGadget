@@ -14,7 +14,7 @@
  */
 
 /*
- * I've commented out a few things just to get the Tabs module to compile - Rik G
+ * I've changed a few things just to get the Tabs module to compile - Rik G
 */
 
 #include <stdio.h>
@@ -22,10 +22,35 @@
 #include "kernel.h"
 #include "swis.h"
 
-#include "twimp.h"
-#include "macros.h"
-#include "objects/toolbox.h"
-#include "objects/window.h"
+#include "window.h"
+
+/*
+ * These are from the header files exported from the ROOL builder
+ * Namely RISCOS.Export.APCS-32.Lib.tboxlibint.objects.h.window
+*/
+#define Window_RegisterExternal     (Window_SWIChunkBase + 5)
+#define Window_DeregisterExternal   (Window_SWIChunkBase + 6)
+#define Window_SupportExternal      (Window_SWIChunkBase + 7)
+#define Window_RegisterFilter       (Window_SWIChunkBase + 8)
+#define Window_DeregisterFilter     (Window_SWIChunkBase + 9)
+#define Window_EnumerateGadgets     (Window_SWIChunkBase +10)
+#define Window_GadgetGetIconList    (Window_SWIChunkBase +11)
+
+typedef struct
+{
+        int xmin, ymin, xmax, ymax;
+} wimp_Bbox;
+
+
+/*
+ * Dependencies on header files that are in the RISCOS source tree,
+ * but not exported by the builder. So I've just copied in the
+ * relevant stuff, above.
+*/
+//#include "twimp.h"
+//#include "macros.h"
+//#include "objects/toolbox.h"
+//#include "objects/window.h"
 
 //#include "Sizes.h"
 //#include "riscos_uti.h"
@@ -70,6 +95,7 @@ void mem_free(void *tag)
    _swix(Window_SupportExternal, _INR(0,2), 0, 5, tag);
 }
 
+/*
 void graphics_window(wimp_Bbox *area)
 {
    _swix(OS_WriteI+5,0);
@@ -84,9 +110,14 @@ void graphics_window(wimp_Bbox *area)
    _swix(OS_WriteI+(((area->ymax -1) >> 8) & 255),0);
 
 }
+*/
 
 /* convert work area coords to screen coords */
 
+/*
+ * Commented this out because Tabs doesn't need it, and there
+ * are dependencies on other things in the RISCOS source tree.
+*/
 #if 0
 void work_to_screen(wimp_Bbox *wa, wimp_GetWindowState *state)
 {

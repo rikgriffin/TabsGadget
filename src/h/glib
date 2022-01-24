@@ -18,6 +18,10 @@
  *
  */
 
+/*
+ * I've commented out a few things just to get the Tabs module to compile - Rik G
+*/
+
 
 #ifndef __glib_h
 #define __glib_h

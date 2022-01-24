@@ -1,9 +1,6 @@
 /* Tabs.Main.c			*/
 /* Rik Griffin Nov 2003		*/
 
-//#include "MemCheck:MemCheck.h"
-//#include "HierProf:HierProf.h"
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
