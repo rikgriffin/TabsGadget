@@ -12,9 +12,16 @@
 #include "Main.h"
 #include "Version.h"
 
-#include "Rikslib:Services.h"
+#include "glib.h"
+#include "rmensure.h"
 
-#include "C:RMEnsure.h"
+/*
+ * Presumably these will be in a header file somewhere
+*/
+#define Service_WindowModuleStarting	(0x82881)
+#define Service_ModeChange		(0x46)
+#define Service_RedrawingWindow		(0x44EC6)
+
 
 #if Debug_On
 #define DEBUG_METHOD_CODE_MAX 13
@@ -121,7 +128,12 @@ _kernel_oserror *initialise(const char *cmd_tail, int podule, void *pw) {
   }
   #endif
 
-  ER(rmcheck("WindowManager", "3.98"), e);
+  /*
+   * This needs the rmcheck() function that was included in
+   * some version of Acorn's glib, but seemingly not the version
+   * that's in the ROOL source tree.
+  */
+  //ER(rmcheck("WindowManager", "3.98"), e);
 
 /*
   if (ensure_toolbox_mod("Toolbox", "1.63") != NULL) {

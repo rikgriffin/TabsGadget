@@ -1,4 +1,4 @@
-ccFlags = -c -depend !Depend -IC: -throwback -fafh -apcs 3/32/fpe2/swst/fp/nofpr
+ccFlags = -c -depend !Depend -IC:,<Lib$Dir>.tboxlibint. -throwback -fafh -apcs 3/32/fpe2/swst/fp/nofpr
 Linkflags = -rmf
 AsmFlags = -throwback -depend !Depend
 Squeezeflags = -v
@@ -14,9 +14,9 @@ LibraryFiles = o.veneers
 
 CommonObjFiles = o.Header o.Sprites
 
-NormalObjFiles	= o.Main o.Filters o.M_Add o.M_Plot o.M_Remove o.M_SetState o.M_Method o.Debug o.Redraw o.Tabs o.Misc
+NormalObjFiles	= o.Main o.Filters o.M_Add o.M_Plot o.M_Remove o.M_SetState o.M_Method o.Debug o.Redraw o.Tabs o.Misc o.glib o.glib3
 
-NormalLibFiles = C:o.Stubs C:o.glib C:o.toolboxlib C:o.wimplib
+NormalLibFiles = C:o.Stubs C:o.toolboxlib C:o.wimplib <Lib$Dir>.tboxlibint.o.tboxlibm
 
 # Final targets:
 .SUFFIXES:	.o .c .s .m .p
@@ -37,8 +37,8 @@ Clean:  Run:rm
 	rm $(Library)
 	rm $(LibraryFiles)
 	rm h.Header
-	#rm c.Sprites
-	#trim -file MakeFile -line "<35> Dynamic dependencies:"
+	rm c.Sprites
+	trim -file MakeFile -line "<35> Dynamic dependencies:"
 
 # Static dependencies:
 h.Header:	o.Header

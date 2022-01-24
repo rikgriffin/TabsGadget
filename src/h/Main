@@ -3,7 +3,6 @@
 
 #include "C:kernel.h"
 #include "C:swis.h"
-#include "C:glib.h"
 
 #include "Consts.h"
 #include "Header.h"
