@@ -12,13 +12,6 @@
 #include "glib.h"
 #include "rmensure.h"
 
-/*
- * Presumably these will be in a header file somewhere
-*/
-#define Service_WindowModuleStarting	(0x82881)
-#define Service_ModeChange		(0x46)
-#define Service_RedrawingWindow		(0x44EC6)
-
 
 #if Debug_On
 #define DEBUG_METHOD_CODE_MAX 13

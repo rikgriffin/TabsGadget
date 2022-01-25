@@ -1,5 +1,5 @@
 #include "Version.h"
-#include "Rikslib:Services.h"
+#include "Consts.h"
 
 help-string:	Tabs Module_MajorVersion_CMHG Module_MinorVersion_CMHG
 

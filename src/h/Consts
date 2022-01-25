@@ -28,3 +28,10 @@ extern void *mem_extend_wrapper(void *x, int y, char *file, int line);
 #define _mem_free(x) mem_free(x)
 #define _mem_extend(x,y) mem_extend(x,y)
 #endif
+
+/*
+ * Presumably these will be in a header file somewhere
+*/
+#define Service_WindowModuleStarting	(0x82881)
+#define Service_ModeChange		(0x46)
+#define Service_RedrawingWindow		(0x44EC6)
