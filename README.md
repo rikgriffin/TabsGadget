@@ -7,9 +7,13 @@ I've uploaded the source to github using a RISC OS style directory structure (eg
 
 Build instructions:
 
-Tabs was written using the Acorn (later ROOL) development environment, and the Norcroft compiler. It needs the standard C library, the Toolbox library and "glib" - both the header files for compilation and the libraries to link against.
+You need to download the small helper programs in the "Utilities" repo. One of these, "bin2c", requires compilation - just double click the included Make obey file.
+
+Tabs was written using the Acorn (later ROOL) development environment, and the Norcroft compiler. It needs the standard C library and the Toolbox libraries - both the header files for compilation and the libraries to link against.
 
 There used to be a dependency on an ancient product called "Dr Smith's C Development Toolkit" which was something like "valgrind" for RISC OS. But for this final release I've commented out any dependencies on that product, so you should be able to compile the module with just a standard "Acorn C/C++" development environment.
+
+I've also removed a dependency on Acorn's "glib", simply by including the required files from the ROOL source in this distribution. There are the "glib", "glib3" and "rmensure" source files - they are all Apache licensed and copyright Acorn. These files were taken from RISCOS.Sources.Toolbox.Gadgets in the ROOL source tree.
 
 I've never tried building this under any other environment, or with any other compiler, but I'm sure someone will make that work!
 
